@@ -1,0 +1,3113 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PlayMonitor — Painel de Monitoramento</title>
+<link rel="icon" type="image/png" href="PlayMonitor.png">
+<style>
+:root {
+  --bg:#060E1A;--surf:#0C1928;--surf2:#142236;--bdr:#1C304A;--bdr2:#2A4A6A;
+  --txt:#B8D0E8;--muted:#4A6882;--accent:#00BCFF;--accent-dim:rgba(0,188,255,0.12);
+  --good:#00DC78;--good-bg:rgba(0,220,120,0.12);
+  --warn:#FFBB00;--warn-bg:rgba(255,187,0,0.12);
+  --crit:#FF3E5E;--crit-bg:rgba(255,62,94,0.14);
+  --num:#7ACEFF;--r:8px;--rs:4px;
+}
+@media(prefers-color-scheme:light){:root{
+  --bg:#ECF1F8;--surf:#FFF;--surf2:#F5F8FC;--bdr:#C4D4E4;--bdr2:#94B0C8;
+  --txt:#142236;--muted:#5A7890;--accent:#006ECC;--accent-dim:rgba(0,110,204,0.1);
+  --good:#008840;--good-bg:rgba(0,136,64,0.1);
+  --warn:#995500;--warn-bg:rgba(153,85,0,0.1);
+  --crit:#CC1130;--crit-bg:rgba(204,17,48,0.1);--num:#004A99;
+}}
+:root[data-theme="dark"]{
+  --bg:#060E1A;--surf:#0C1928;--surf2:#142236;--bdr:#1C304A;--bdr2:#2A4A6A;
+  --txt:#B8D0E8;--muted:#4A6882;--accent:#00BCFF;--accent-dim:rgba(0,188,255,0.12);
+  --good:#00DC78;--good-bg:rgba(0,220,120,0.12);
+  --warn:#FFBB00;--warn-bg:rgba(255,187,0,0.12);
+  --crit:#FF3E5E;--crit-bg:rgba(255,62,94,0.14);--num:#7ACEFF;
+}
+:root[data-theme="light"]{
+  --bg:#ECF1F8;--surf:#FFF;--surf2:#F5F8FC;--bdr:#C4D4E4;--bdr2:#94B0C8;
+  --txt:#142236;--muted:#5A7890;--accent:#006ECC;--accent-dim:rgba(0,110,204,0.1);
+  --good:#008840;--good-bg:rgba(0,136,64,0.1);
+  --warn:#995500;--warn-bg:rgba(153,85,0,0.1);
+  --crit:#CC1130;--crit-bg:rgba(204,17,48,0.1);--num:#004A99;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,'Segoe UI',Arial,sans-serif;font-size:13px;line-height:1.5;min-height:100vh}
+
+/* ─── HEADER ─── */
+.hd{display:flex;align-items:center;justify-content:space-between;padding:10px 20px;background:var(--surf);border-bottom:1px solid var(--bdr);position:sticky;top:0;z-index:100;gap:12px;flex-wrap:wrap}
+.hd-logo{width:32px;height:32px;object-fit:contain;flex-shrink:0}
+.hd-title{font-size:14px;font-weight:700;letter-spacing:-0.3px}
+.hd-sub{font-size:10px;color:var(--muted)}
+.hd-right{display:flex;align-items:center;gap:8px}
+
+/* ─── BUTTONS ─── */
+.btn{display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:var(--rs);border:1px solid var(--bdr);background:var(--surf2);color:var(--txt);font-size:12px;font-weight:500;cursor:pointer;transition:border-color .15s,background .15s;white-space:nowrap;font-family:inherit}
+.btn:hover{border-color:var(--bdr2)}
+.btn-p{background:var(--accent);border-color:var(--accent);color:#000;font-weight:700}
+.btn-p:hover{filter:brightness(1.1)}
+.btn-d{border-color:var(--crit);color:var(--crit)}
+.btn-d:hover{background:var(--crit-bg)}
+.btn-ico{padding:5px 7px}
+
+/* ─── MAIN ─── */
+:root{--hd-h:53px}
+.app-layout{display:flex;align-items:flex-start}
+.main{flex:1;min-width:0;padding:16px 20px;max-width:1600px}
+
+/* ─── MODAL ─── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);z-index:200;display:none;align-items:flex-start;justify-content:center;padding:32px 16px;overflow-y:auto}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surf);border:1px solid var(--bdr);border-radius:var(--r);width:100%;max-width:820px;display:flex;flex-direction:column;max-height:calc(100vh - 64px);box-shadow:0 24px 64px rgba(0,0,0,.5)}
+.modal-hd{display:flex;align-items:center;justify-content:space-between;padding:13px 18px;border-bottom:1px solid var(--bdr);background:var(--surf2);border-radius:var(--r) var(--r) 0 0;flex-shrink:0;gap:10px}
+.modal-hd-title{font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px}
+.modal-body{padding:14px;overflow-y:auto;flex:1}
+.modal-ft{display:flex;gap:8px;align-items:center;padding:11px 18px;border-top:1px solid var(--bdr);background:var(--surf2);border-radius:0 0 var(--r) var(--r);flex-shrink:0;flex-wrap:wrap}
+.modal-ft-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.modal-close{width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:var(--rs);border:1px solid var(--bdr);background:transparent;color:var(--txt);cursor:pointer;flex-shrink:0}
+.modal-close:hover{background:var(--crit-bg);border-color:var(--crit);color:var(--crit)}
+.chevron{transition:transform .2s}
+.chevron.open{transform:rotate(180deg)}
+
+/* station config rows */
+.stn-list{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
+.lbl{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;margin-bottom:3px}
+.inp{background:var(--bg);border:1px solid var(--bdr);border-radius:var(--rs);color:var(--txt);padding:5px 9px;font-size:12px;font-family:inherit;width:100%;transition:border-color .15s}
+.inp:focus{outline:none;border-color:var(--accent)}
+.tgl{width:36px;height:20px;background:var(--bdr);border-radius:10px;position:relative;cursor:pointer;transition:background .2s;border:none;flex-shrink:0}
+.tgl.on{background:var(--accent)}
+.tgl::after{content:'';position:absolute;width:14px;height:14px;border-radius:7px;background:#fff;top:3px;left:3px;transition:transform .2s}
+.tgl.on::after{transform:translateX(16px)}
+.g-settings{display:flex;gap:16px;align-items:flex-start;padding-top:12px;border-top:1px solid var(--bdr);margin-top:12px;flex-wrap:wrap}
+.cors-note{font-size:11px;background:var(--warn-bg);border:1px solid var(--warn);border-radius:var(--rs);padding:8px 12px;color:var(--warn);line-height:1.6;max-width:480px}
+.cors-note code{background:rgba(255,187,0,.2);padding:1px 4px;border-radius:3px;font-family:monospace}
+
+/* ─── STATION GRID ─── */
+/* mosaico real (distribuído via JS): cada coluna recebe o próximo grupo pela
+   menor altura acumulada no momento — evita espaço vazio quando um grupo
+   compacto fica ao lado de um detalhado bem mais alto */
+.content-row{display:flex;align-items:flex-start;gap:16px}
+.content-row .stn-grid{flex:1;min-width:0}
+.ranking-panel{width:250px;flex-shrink:0;background:var(--surf);border:1px solid var(--bdr);border-radius:var(--r);padding:12px;position:sticky;top:var(--hd-h);align-self:flex-start;max-height:calc(100vh - var(--hd-h) - 16px);overflow-y:auto}
+.rank-panel-hd{display:flex;align-items:center;gap:6px;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700;margin-bottom:8px}
+.rank-item{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bdr)}
+.rank-item:last-of-type{border-bottom:none}
+.rank-pos{width:20px;flex-shrink:0;font-size:12px;text-align:center;font-weight:700;color:var(--muted)}
+.rank-name{flex:1;min-width:0;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rank-num{font-size:13px;font-weight:800;color:var(--num);font-variant-numeric:tabular-nums;flex-shrink:0}
+.rank-num.off{color:var(--muted)}
+
+.stn-grid{display:flex;align-items:flex-start;gap:16px}
+.stn-col{flex:1;min-width:0;display:flex;flex-direction:column;gap:16px;min-height:70px}
+.stn-col-empty{border:1.5px dashed var(--bdr2);border-radius:var(--rs);min-height:70px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;text-align:center;padding:8px}
+.grp-drag-handle{display:flex;align-items:center;cursor:grab;color:var(--muted);flex-shrink:0;padding:3px;border-radius:3px;transition:background .15s,color .15s}
+.grp-drag-handle:hover{color:var(--txt);background:var(--bdr)}
+.group.dragging{opacity:.45}
+body.dragging-group{cursor:grabbing!important;user-select:none}
+body.dragging-group *{cursor:grabbing!important}
+
+/* ─── CARD ─── */
+.card{background:var(--surf);border:1px solid var(--bdr);border-radius:var(--r);overflow:hidden;transition:border-color .2s,box-shadow .2s}
+.card.fault{border-color:var(--crit);box-shadow:0 0 0 1px var(--crit),0 0 24px rgba(255,62,94,.08)}
+
+/* fault banner */
+.fault-bar{background:var(--crit-bg);border-bottom:1px solid var(--crit);padding:6px 14px;display:flex;align-items:center;gap:8px;color:var(--crit);font-weight:700;font-size:12px}
+
+/* card head */
+.c-head{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--bdr);background:var(--surf2);gap:8px;cursor:pointer;user-select:none}
+.c-head-l{display:flex;align-items:center;gap:9px}
+.dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.dot-ok{background:var(--good);box-shadow:0 0 6px var(--good);animation:pgood 2s infinite}
+.dot-err{background:var(--crit);box-shadow:0 0 6px var(--crit);animation:pbad 1s infinite}
+.dot-ld{background:var(--warn);box-shadow:0 0 6px var(--warn);animation:pwarn 1s infinite}
+@keyframes pgood{0%,100%{opacity:1}50%{opacity:.55}}
+@keyframes pbad{0%,100%{opacity:1}50%{opacity:.25}}
+@keyframes pwarn{0%,100%{opacity:1}50%{opacity:.4}}
+.stn-name{font-size:15px;font-weight:800;letter-spacing:-0.3px}
+.stn-meta{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--muted);margin-top:1px;flex-wrap:wrap}
+.stn-meta strong{color:var(--accent);font-size:12px}
+.chip{background:var(--accent-dim);color:var(--accent);padding:1px 6px;border-radius:3px;font-size:10px;font-weight:700}
+.rf-badge{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;display:flex;align-items:center;gap:4px}
+.rf-badge.on{color:var(--good)}
+.rf-badge.off{color:var(--crit)}
+
+/* metrics 3-col */
+.m-grid{display:grid;grid-template-columns:1.3fr 1fr .85fr;border-bottom:1px solid var(--bdr)}
+.m-sec{padding:12px 14px;border-right:1px solid var(--bdr)}
+.m-sec:last-child{border-right:none}
+.sec-lbl{font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:700;margin-bottom:8px}
+
+/* power */
+.pwr-big{display:flex;align-items:baseline;gap:4px;margin-bottom:5px}
+.pwr-num{font-size:30px;font-weight:900;font-variant-numeric:tabular-nums;line-height:1;letter-spacing:-1.5px}
+.pwr-unit{font-size:13px;color:var(--muted);font-weight:500}
+.pwr-tgt{font-size:11px;color:var(--muted);margin-bottom:7px}
+.bar-wrap{height:5px;background:var(--bdr);border-radius:3px;overflow:hidden;margin-bottom:10px}
+.bar-fill{height:100%;border-radius:3px;transition:width .6s ease,background-color .3s}
+.bar-fill.ok{background:var(--good)}
+.bar-fill.wn{background:var(--warn)}
+.bar-fill.cr{background:var(--crit)}
+.ref-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+/* BT VU meters */
+.vu-pair{display:flex;gap:12px;align-items:flex-end}
+.vu-vert{display:flex;flex-direction:column;align-items:center;gap:3px;width:28px}
+.vu-vert-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.vu-vert-track{width:18px;height:90px;background:var(--bdr);border-radius:3px;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end}
+.vu-vert-fill{width:100%;transition:height .4s ease;border-radius:3px}
+.vu-vert-val{font-size:9px;font-variant-numeric:tabular-nums;color:var(--txt);text-align:center;line-height:1.2}
+.mm{display:flex;flex-direction:column;gap:2px}
+.mm-lbl{font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600}
+.mm-val{font-size:13px;font-weight:700;color:var(--num);font-variant-numeric:tabular-nums}
+.mm-val.ok{color:var(--good)}.mm-val.wn{color:var(--warn)}.mm-val.cr{color:var(--crit)}
+
+/* PA */
+.pa-v{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--num)}
+.pa-stages{font-size:10px;color:var(--muted);font-variant-numeric:tabular-nums;margin-top:2px;margin-bottom:7px}
+.phase-row{display:flex;gap:4px;flex-wrap:wrap;margin-top:5px}
+.ph{padding:2px 6px;border-radius:3px;font-size:11px;font-variant-numeric:tabular-nums;font-weight:700;border:1px solid}
+.ph.ok{border-color:var(--good);color:var(--good);background:var(--good-bg)}
+.ph.wn{border-color:var(--warn);color:var(--warn);background:var(--warn-bg)}
+.ph.cr{border-color:var(--crit);color:var(--crit);background:var(--crit-bg)}
+.bat-row{font-size:11px;color:var(--muted);margin-top:5px;display:flex;gap:5px;align-items:center}
+.bat-v{color:var(--num);font-weight:700;font-variant-numeric:tabular-nums}
+
+/* temp */
+.tmp-big{font-size:28px;font-weight:900;font-variant-numeric:tabular-nums;line-height:1;margin-bottom:5px}
+.tmp-big.ok{color:var(--good)}.tmp-big.wn{color:var(--warn)}.tmp-big.cr{color:var(--crit)}
+.tmp-bar-wrap{height:5px;background:var(--bdr);border-radius:3px;overflow:hidden;margin-bottom:9px}
+.tmp-bar-fill{height:100%;border-radius:3px;transition:width .6s;background:linear-gradient(to right,var(--good),var(--warn) 68%,var(--crit))}
+
+/* bottom */
+.b-grid{display:grid;grid-template-columns:1fr 1.6fr}
+.aud-sec{padding:10px 14px;border-right:1px solid var(--bdr)}
+.sts-sec{padding:10px 14px}
+.aud-meters{display:flex;flex-direction:column;gap:5px;margin-top:6px}
+.aud-row{display:flex;align-items:center;gap:7px}
+.aud-ch{width:16px;font-size:9px;font-weight:700;text-transform:uppercase;color:var(--muted);flex-shrink:0}
+.aud-bw{flex:1;height:7px;background:var(--bdr);border-radius:2px;overflow:hidden}
+.aud-bf{height:100%;background:linear-gradient(to right,var(--good),var(--warn) 80%,var(--crit));border-radius:2px;transition:width .3s;min-width:2px}
+.aud-n{font-size:10px;color:var(--num);font-variant-numeric:tabular-nums;width:24px;text-align:right;flex-shrink:0}
+.mpx-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px}
+.sts-pills{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px}
+.pill{display:inline-flex;align-items:center;gap:4px;padding:3px 7px;border-radius:10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;border:1px solid transparent}
+.pill-d{width:5px;height:5px;border-radius:50%}
+.pill.on{background:var(--good-bg);border-color:var(--good);color:var(--good)}.pill.on .pill-d{background:var(--good)}
+.pill.off{background:var(--crit-bg);border-color:var(--crit);color:var(--crit)}.pill.off .pill-d{background:var(--crit)}
+.pill.n{background:var(--surf2);border-color:var(--bdr);color:var(--muted)}.pill.n .pill-d{background:var(--muted)}
+.pill.ac{background:var(--accent-dim);border-color:var(--accent);color:var(--accent)}.pill.ac .pill-d{background:var(--accent)}
+.pill.wn{background:var(--warn-bg);border-color:var(--warn);color:var(--warn)}.pill.wn .pill-d{background:var(--warn)}
+.sts-time{font-size:11px;color:var(--muted);margin-top:4px}
+
+/* footer */
+.c-foot{padding:6px 14px;border-top:1px solid var(--bdr);background:var(--surf2);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:7px;font-size:10px;color:var(--muted)}
+
+/* states */
+.c-state{padding:32px 24px;text-align:center;color:var(--muted)}
+.c-state-ico{font-size:36px;margin-bottom:10px;display:block;opacity:.4}
+.c-state-msg{font-size:13px;color:var(--txt);margin-bottom:4px;font-weight:600}
+.c-state-sub{font-size:11px;margin-bottom:8px}
+.cors-hint{font-size:11px;background:var(--warn-bg);border:1px solid var(--warn);border-radius:var(--rs);padding:8px 12px;color:var(--warn);text-align:left;line-height:1.6;max-width:380px;margin:8px auto 0}
+.cors-hint code{background:rgba(255,187,0,.2);padding:1px 4px;border-radius:3px;font-family:monospace}
+
+/* empty */
+.empty{text-align:center;padding:60px 24px;grid-column:1/-1;color:var(--muted)}
+.empty h2{font-size:20px;color:var(--txt);margin-bottom:8px}
+.empty p{margin-bottom:20px;font-size:14px}
+
+/* ─── SECTION BARS (Streaming / Generator) ─── */
+.sec-bar{display:flex;align-items:center;gap:8px;padding:7px 14px;border-top:2px solid var(--bdr2);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em}
+.sec-bar-lbl{flex:1}
+.sec-bar svg{flex-shrink:0;opacity:.85}
+.sec-bar-stream{background:rgba(0,188,255,.07);border-left:3px solid var(--accent);color:var(--accent)}
+:root[data-theme="light"] .sec-bar-stream{background:rgba(0,110,204,.07)}
+@media(prefers-color-scheme:light){.sec-bar-stream{background:rgba(0,110,204,.07)}}
+.sec-bar-gen{background:rgba(255,187,0,.07);border-left:3px solid var(--warn);color:var(--warn)}
+.sec-body{padding:10px 14px}
+/* inner content helpers */
+.str-label{font-size:9px;text-transform:uppercase;letter-spacing:.1em;font-weight:700;color:var(--muted)}
+.str-mount{font-family:'Cascadia Mono','Consolas','SF Mono',monospace;font-size:11px;color:var(--accent);background:var(--accent-dim);padding:1px 7px;border-radius:3px}
+.str-metrics{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}
+.lstn-big{font-size:28px;font-weight:900;color:var(--num);font-variant-numeric:tabular-nums;line-height:1}
+.str-footer{display:flex;gap:14px;flex-wrap:wrap;font-size:10px;color:var(--muted);margin-top:8px;align-items:center}
+.str-offline{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);padding:6px 0}
+/* ─── GROUP LAYOUT ─── */
+.group{border:1px solid var(--bdr);border-radius:var(--rs);overflow:hidden}
+.group-hd{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 14px;background:var(--surf2);border-bottom:1px solid var(--bdr);cursor:pointer;user-select:none}
+.group-hd:hover{background:var(--bdr)}
+.group-name{font-size:13px;font-weight:700;color:var(--txt)}
+.group-loc{display:flex;align-items:center;gap:8px}
+.group-hd-right{display:flex;align-items:center;gap:10px}
+.grp-chev{transition:transform .2s;flex-shrink:0;opacity:.5}
+.grp-chev.open{transform:rotate(180deg)}
+.group-body{display:block}
+.group-body.collapsed{display:none}
+.c-body{display:block}
+.c-body.collapsed{display:none}
+.group-cards{display:flex;flex-direction:column;gap:8px;padding:8px}
+.group-cards .card{border:1px solid var(--bdr);border-radius:var(--rs)}
+.grp-count{font-size:10px;color:var(--muted);background:var(--surf);border:1px solid var(--bdr);border-radius:8px;padding:1px 7px;font-weight:600}
+/* station config rows */
+.stn-row{display:flex;flex-direction:column;gap:0;padding:10px 12px;background:var(--surf2);border:1px solid var(--bdr);border-radius:var(--rs)}
+.stn-row-main{display:grid;grid-template-columns:110px 100px 1fr 80px auto auto auto;gap:8px;align-items:end}
+.stn-row-stream{display:grid;grid-template-columns:150px 1fr;gap:8px;align-items:end;margin-top:8px;padding-top:8px;border-top:1px dashed var(--bdr)}
+.stn-row-gens{margin-top:8px;padding-top:8px;border-top:1px dashed var(--bdr)}
+.gen-row{display:flex;gap:8px;align-items:center;margin-bottom:6px}
+/* group config block */
+.grp-cfg{border:1px solid var(--bdr);border-radius:var(--rs);margin-bottom:14px;overflow:hidden}
+.grp-cfg-hd{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end;padding:10px 12px;background:var(--surf2);border-bottom:1px solid var(--bdr)}
+.grp-cfg-gens{padding:10px 12px;border-bottom:1px solid var(--bdr);background:var(--surf)}
+.grp-cfg-stns{padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.grp-cfg-foot{display:flex;justify-content:flex-end;padding:8px 12px;border-top:1px solid var(--bdr)}
+
+/* ─── SIDEBAR ─── */
+.sidebar{width:230px;flex-shrink:0;position:sticky;top:var(--hd-h);align-self:flex-start;max-height:calc(100vh - var(--hd-h));overflow-y:auto;background:var(--surf);border-right:1px solid var(--bdr);padding:12px 8px}
+.sb-hd{font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:700;padding:2px 9px 9px}
+.sb-empty{padding:10px 9px;color:var(--muted);font-size:11px;line-height:1.5}
+.sb-item{display:flex;align-items:center;gap:8px;padding:8px 9px;border-radius:var(--rs);cursor:pointer;margin-bottom:2px;border:1px solid transparent;transition:background .15s,border-color .15s}
+.sb-item:hover{background:var(--surf2)}
+.sb-item:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.sb-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.sb-dot.ok{background:var(--good);box-shadow:0 0 6px var(--good)}
+.sb-dot.wn{background:var(--warn);box-shadow:0 0 6px var(--warn)}
+.sb-dot.cr{background:var(--crit);box-shadow:0 0 6px var(--crit)}
+.sb-dot.n{background:var(--muted)}
+.sb-name{flex:1;min-width:0;font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sb-count{font-size:10px;color:var(--muted);background:var(--bg);border:1px solid var(--bdr);border-radius:8px;padding:1px 6px;flex-shrink:0;font-variant-numeric:tabular-nums}
+@keyframes grpFlash{0%{box-shadow:0 0 0 3px var(--accent)}100%{box-shadow:0 0 0 0 rgba(0,188,255,0)}}
+.group.flash{animation:grpFlash 1s ease}
+
+/* ─── SUMMARY BAR ─── */
+.summary-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.sum-chip{display:flex;align-items:center;gap:9px;padding:8px 14px;background:var(--surf);border:1px solid var(--bdr);border-radius:var(--r);cursor:pointer;transition:border-color .15s,background .15s,transform .1s;user-select:none}
+.sum-chip:hover{border-color:var(--bdr2)}
+.sum-chip:active{transform:scale(.97)}
+.sum-chip.active{border-color:var(--accent);background:var(--accent-dim)}
+.sum-chip-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.sum-chip-num{font-size:19px;font-weight:900;font-variant-numeric:tabular-nums;line-height:1;letter-spacing:-.5px}
+.sum-chip-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:700;white-space:nowrap}
+
+/* ─── DENSITY TOGGLE ─── */
+.density-toggle{display:flex;border:1px solid var(--bdr);border-radius:var(--rs);overflow:hidden;flex-shrink:0}
+.density-btn{padding:3px 9px;font-size:10px;font-weight:700;cursor:pointer;background:var(--surf);color:var(--muted);border:none;font-family:inherit;transition:background .15s,color .15s}
+.density-btn:hover{color:var(--txt)}
+.density-btn.active{background:var(--accent);color:#fff}
+
+/* ─── COMPACT ROW LIST ─── */
+.group-rows{display:flex;flex-direction:column;border:1px solid var(--bdr);border-radius:var(--rs);overflow:hidden;margin:8px}
+.row-compact{display:flex;align-items:center;gap:10px;padding:11px 14px;background:var(--surf);border-bottom:1px solid var(--bdr);cursor:pointer;user-select:none;transition:background .15s}
+.group-rows > div:last-child .row-compact{border-bottom:none}
+.row-compact:hover{background:var(--surf2)}
+.row-compact-name{flex:1;min-width:0;font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row-compact-meta{display:flex;align-items:center;gap:8px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end}
+.row-compact-metric{font-size:14px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--num);white-space:nowrap}
+.row-compact-metric.ok{color:var(--good)}.row-compact-metric.wn{color:var(--warn)}.row-compact-metric.cr{color:var(--crit)}
+.row-compact-body{background:var(--bg);border-bottom:1px solid var(--bdr)}
+.group-rows > div:last-child .row-compact-body{border-bottom:none}
+
+@media(max-width:900px){
+  .app-layout{flex-direction:column}
+  .sidebar{position:static;width:100%;max-height:none;display:flex;gap:6px;overflow-x:auto;overflow-y:hidden;border-right:none;border-bottom:1px solid var(--bdr);padding:8px}
+  .sb-hd{display:none}
+  .sb-item{flex-shrink:0;min-width:120px;margin-bottom:0}
+}
+
+@media(max-width:700px){
+  .m-grid{grid-template-columns:1fr}
+  .m-sec{border-right:none;border-bottom:1px solid var(--bdr)}
+  .m-sec:last-child{border-bottom:none}
+  .b-grid{grid-template-columns:1fr}
+  .aud-sec{border-right:none;border-bottom:1px solid var(--bdr)}
+  .stn-grid{flex-direction:column}
+  .content-row{flex-direction:column}
+  .ranking-panel{width:100%;position:static;max-height:none;overflow-y:visible}
+  .group-cards .card{min-width:100%;border-right:none;border-bottom:1px solid var(--bdr)}
+  .group-cards .card:last-child{border-bottom:none}
+  .stn-row-main{grid-template-columns:1fr 1fr;grid-template-rows:auto auto auto}
+  .grp-cfg-hd{grid-template-columns:1fr auto}
+  .str-metrics{grid-template-columns:repeat(3,1fr)}
+  .hd{flex-direction:column;align-items:flex-start}
+}
+
+/* ─── ALERT SYSTEM ─── */
+.bell-wrap{position:relative;display:inline-flex}
+.bell-cnt{position:absolute;top:-5px;right:-5px;background:var(--crit);color:#fff;font-size:9px;font-weight:800;min-width:15px;height:15px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 3px;pointer-events:none;line-height:1}
+.alert-banner{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+.al-strip{display:flex;align-items:flex-start;gap:10px;padding:8px 12px;border-radius:var(--rs);font-size:12px;line-height:1.4;animation:al-in .2s ease}
+@keyframes al-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+.al-strip-crit{background:var(--crit-bg);border-left:3px solid var(--crit)}
+.al-strip-high{background:var(--warn-bg);border-left:3px solid var(--warn)}
+.al-strip-info{background:rgba(255,165,0,.08);border-left:3px solid #FFA500}
+.al-strip-icon{flex-shrink:0;font-size:14px;width:18px;text-align:center}
+.al-strip-body{flex:1;min-width:0}
+.al-strip-msg{font-weight:700;color:var(--txt)}
+.al-strip-det{font-size:11px;color:var(--muted);margin-top:2px}
+.al-strip-ts{font-size:10px;color:var(--muted);white-space:nowrap;flex-shrink:0;padding-top:2px}
+.al-strip-x{background:none;border:none;cursor:pointer;color:var(--muted);padding:0 0 0 6px;font-size:18px;line-height:1;flex-shrink:0;opacity:.7}
+.al-strip-x:hover{opacity:1;color:var(--txt)}
+/* alert log modal */
+.al-log-entry{display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid var(--bdr)}
+.al-log-entry:last-child{border-bottom:none}
+.al-log-icon{font-size:14px;flex-shrink:0;width:18px;text-align:center;padding-top:1px}
+.al-log-body{flex:1;min-width:0}
+.al-log-msg{font-size:12px;font-weight:600;color:var(--txt)}
+.al-log-det{font-size:11px;color:var(--muted);margin-top:2px}
+.al-log-ts{font-size:10px;color:var(--muted);white-space:nowrap;flex-shrink:0;padding-top:2px;font-variant-numeric:tabular-nums}
+.al-empty{text-align:center;padding:40px 0;color:var(--muted);font-size:12px}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="hd">
+  <div style="display:flex;align-items:center;gap:10px">
+    <img class="hd-logo" src="PlayMonitor.png" alt="PlayMonitor">
+    <div>
+      <div class="hd-title">PlayMonitor</div>
+      <div class="hd-sub">Monitoramento de Transmissores, Geradores e Streaming</div>
+    </div>
+  </div>
+  <div class="hd-right">
+    <span id="globalTs" style="font-size:11px;color:var(--muted)"></span>
+    <button class="btn" onclick="toggleTheme()" title="Alternar tema">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+      Tema
+    </button>
+    <div class="bell-wrap">
+      <button class="btn" id="bellBtn" onclick="toggleAlertLog()" title="Alertas e eventos">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        Alertas
+      </button>
+      <span class="bell-cnt" id="bellCnt" style="display:none">0</span>
+    </div>
+    <button class="btn" onclick="openGenReport()" title="Relatório de operação dos geradores">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10"/></svg>
+      Relatório
+    </button>
+    <button class="btn" onclick="openRanking()" title="Ranking de ouvintes online">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      Ranking
+    </button>
+    <button class="btn" onclick="openCfg()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l-.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      Configurações
+    </button>
+  </div>
+</header>
+
+<div class="app-layout">
+  <nav class="sidebar" id="sidebar"></nav>
+  <div class="main">
+    <div class="summary-bar" id="summaryBar"></div>
+    <div id="alertBanner" class="alert-banner"></div>
+    <div class="content-row">
+      <div class="stn-grid" id="stnGrid"></div>
+      <aside class="ranking-panel" id="rankingPanel"></aside>
+    </div>
+  </div>
+</div>
+
+<!-- Alert Log Modal -->
+<div id="alertLogModal" class="modal-overlay" onclick="if(event.target===this)closeAlertLog()">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-hd">
+      <span class="modal-hd-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        Alertas e Eventos
+      </span>
+      <button class="btn" onclick="clearAlertLog()" style="font-size:11px;margin-right:auto">Limpar histórico</button>
+      <button class="modal-close" onclick="closeAlertLog()" title="Fechar">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" id="alertLogBody" style="padding:0 16px"></div>
+  </div>
+</div>
+
+<!-- Generator Run Report Modal -->
+<div id="genReportModal" class="modal-overlay" onclick="if(event.target===this)closeGenReport()">
+  <div class="modal" style="max-width:680px">
+    <div class="modal-hd">
+      <span class="modal-hd-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10"/></svg>
+        Relatório de Geradores
+      </span>
+      <button class="btn" onclick="clearGenReport()" style="font-size:11px;margin-right:auto">Limpar histórico</button>
+      <button class="modal-close" onclick="closeGenReport()" title="Fechar">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" id="genReportBody" style="padding:0 16px"></div>
+  </div>
+</div>
+
+<!-- Listener Ranking Modal -->
+<div id="rankingModal" class="modal-overlay" onclick="if(event.target===this)closeRanking()">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-hd">
+      <span class="modal-hd-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        Ranking de Ouvintes Online
+      </span>
+      <button class="modal-close" onclick="closeRanking()" title="Fechar">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" id="rankingBody" style="padding:0 16px"></div>
+  </div>
+</div>
+
+<!-- Config Modal -->
+<div id="cfgModal" class="modal-overlay" onclick="if(event.target===this)closeCfg()">
+  <div class="modal">
+    <div class="modal-hd">
+      <span class="modal-hd-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l-.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Configurações
+      </span>
+      <button class="modal-close" onclick="closeCfg()" title="Fechar">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="stn-list" id="stnList"></div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn btn-p" onclick="addGroup()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Adicionar Grupo
+      </button>
+      <button class="btn" id="saveBtn" onclick="saveCfg()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        Salvar e Aplicar
+      </button>
+      <button class="btn" onclick="exportCfg()" title="Salvar a configuração atual em um arquivo">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Exportar
+      </button>
+      <button class="btn" onclick="importCfg()" title="Carregar configuração de um arquivo (substitui a atual)">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Importar
+      </button>
+      <input type="file" id="importFileInput" accept=".json,application/json" style="display:none" onchange="handleImportFile(event)">
+      <div class="modal-ft-right">
+        <div class="lbl" style="margin-bottom:0;white-space:nowrap">Intervalo padrão (s)</div>
+        <input type="number" class="inp" id="gInterval" min="2" max="120" style="width:80px">
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SK = 'snMon_v5';
+
+function defCfg() {
+  return {
+    theme: 'dark',
+    interval: 5,
+    groups: [{
+      id: uid(), name: 'Grupo Principal', generators: [],
+      stations: [{
+        id: uid(), name: 'Rádio Principal',
+        url: 'http://131.108.181.230:56000/readTELEMETRY',
+        streamUrl: 'https://painel.sintonizar.tv.br:10106',
+        generators: [],
+        interval: 5, enabled: true
+      }]
+    }]
+  };
+}
+
+function uid() { return 's' + Math.random().toString(36).slice(2,9) }
+
+let cfg = (() => {
+  try { const r = localStorage.getItem(SK); if(r) return {...defCfg(),...JSON.parse(r)}; } catch(e){}
+  return defCfg();
+})();
+
+function saveCfgToStorage() { try { localStorage.setItem(SK, JSON.stringify(cfg)); } catch(e){} }
+
+const EV_KEY = 'snMon_events_v1';
+const AL_KEY = 'snMon_alerts_v1';
+const GENRUN_KEY = 'snMon_genruns_v1';
+
+/* ── RELATÓRIO DE OPERAÇÃO DOS GERADORES (ligou/desligou, com duração) ── */
+let genRunHistory = [];
+function loadGenRunHistory() {
+  try { genRunHistory = JSON.parse(localStorage.getItem(GENRUN_KEY)) || []; } catch(e) { genRunHistory = []; }
+}
+function saveGenRunHistory() {
+  try { localStorage.setItem(GENRUN_KEY, JSON.stringify(genRunHistory.slice(0, 500))); } catch(e) {}
+}
+function startGenRun(genId, genName, parentName, ts) {
+  genRunHistory.unshift({ id: `${ts}-${Math.random().toString(36).slice(2,7)}`, genId, genName, parentName, startTs: ts, endTs: null });
+  saveGenRunHistory();
+}
+function endGenRun(genId, ts) {
+  const run = genRunHistory.find(r => r.genId === genId && r.endTs == null);
+  if (run) { run.endTs = ts; saveGenRunHistory(); }
+}
+
+function saveAlertState() {
+  try {
+    localStorage.setItem(EV_KEY, JSON.stringify(eventLog.slice(0, 200)));
+    const activeMap = {};
+    for (const [id, st] of Object.entries(genAlertSt)) {
+      const hasActive = Object.values(st.active).some(Boolean);
+      if (hasActive) activeMap[id] = { active: {...st.active} };
+    }
+    localStorage.setItem(AL_KEY, JSON.stringify(activeMap));
+  } catch(e) {}
+}
+
+function loadAlertState() {
+  try {
+    const evRaw = localStorage.getItem(EV_KEY);
+    if (evRaw) eventLog = JSON.parse(evRaw);
+  } catch(e) {}
+  try {
+    const alRaw = localStorage.getItem(AL_KEY);
+    if (alRaw) {
+      for (const [id, st] of Object.entries(JSON.parse(alRaw))) {
+        if (!genAlertSt[id]) genAlertSt[id] = { pending:{}, active:{}, fetchFailCount:0, prevData:null };
+        Object.assign(genAlertSt[id].active, st.active);
+      }
+    }
+  } catch(e) {}
+}
+
+/* ── PARSE ── */
+function parseTel(raw) {
+  const f = {};
+  if (!raw) return f;
+  let t = raw.trim().replace(/^,/,'').replace(/;?FIM;?$/,'');
+  t = t.replace(/℃([A-Z][A-Z0-9]*:)/g, '℃;$1');
+  for (const p of t.split(';')) {
+    const s = p.trim(); if (!s) continue;
+    const i = s.indexOf(':'); if (i<=0) continue;
+    const k = s.slice(0,i).trim();
+    if (/^[A-Z][A-Z0-9]*$/.test(k)) f[k] = s.slice(i+1).trim();
+  }
+  return f;
+}
+
+function structData(raw) {
+  const f = parseTel(raw);
+  const re = (str,re) => { const m=(str||'').match(re); return m?m.slice(1):null; };
+
+  const fm = re(f.FWD, /^([\d.]+)\s*W\s*\[\s*([\d.]+)\s*W/);
+  const rm = re(f.REF, /^([\d.]+)\s*W\s*\[\s*VSWR:\s*([\d.]+):1\s*Load_Mismatch:\s*([\d.]+)%\s*Return Loss:\s*([\d.]+)dB/);
+  const tm = re(f.TEMP, /^([\d.]+)/);
+  const im = re(f.IPA, /^([\d.]+)A\s*\|\s*([\d.]+)A\s*\|\s*([\d.]+)A\s*Total:\s*([\d.]+)A/);
+  const gm = re(f.REDE, /R:\s*([\d.]+)V\s*S:\s*([\d.]+)V\s*T:\s*([\d.]+)V\s*Bat:\s*([\d.]+)\s*V\s*\(\s*([+-]?[\d.]+)\s*A/);
+  const rfm = re(f.RFIN, /^([\d.]+)\s*W\s*\|\s*([\d.]+)\s*V\s*\|\s*([\d.]+)\s*A/);
+  const pi = x => x!=null ? parseInt(x) : null;
+
+  return {
+    fwd: { w: fm ? parseFloat(fm[0]) : null, tgt: fm ? parseFloat(fm[1]) : (f.TARGET ? parseFloat(f.TARGET) : null) },
+    ref: { w: rm ? parseFloat(rm[0]) : null, vswr: rm ? parseFloat(rm[1]) : null, mm: rm ? parseFloat(rm[2]) : null, rl: rm ? parseFloat(rm[3]) : null },
+    temp: tm ? parseFloat(tm[0]) : null,
+    vpa: f.VPA ? parseFloat(f.VPA) : null,
+    ipa: im ? { a1:parseFloat(im[0]), a2:parseFloat(im[1]), a3:parseFloat(im[2]), tot:parseFloat(im[3]) } : null,
+    grid: gm ? { r:parseFloat(gm[0]), s:parseFloat(gm[1]), t:parseFloat(gm[2]), bat:parseFloat(gm[3]), batA:parseFloat(gm[4]) } : null,
+    rfin: rfm ? { w:parseFloat(rfm[0]), v:parseFloat(rfm[1]), a:parseFloat(rfm[2]) } : null,
+    faults: (v => /^(ok|0)$/i.test(v) ? '' : v)((f.FAIL||'').trim()),
+    freq: f.FREQ||'', model: f.MOD||'', rds: f.RDS==='ON', rf: f.RF==='ON',
+    mpx: f.MPX||'', mpx2: pi(f.MPX2)||0,
+    left: pi(f.LEFT)||0, right: pi(f.RIGHT)||0,
+    preset: f.PRESET||'', time: f.TIME||'', uptime: f.UPTIME||'',
+    pll: f.VER||'', psu: f.VER2||''
+  };
+}
+
+/* ── BT PARSE ── */
+function parseBTData(json) {
+  const s = json.state || {};
+  const b = json.bits  || {};
+  const m = json.mod   || {};
+  const c = json.conf  || {};
+  const a = json.about || {};
+  const pf = v => { const n = parseFloat(v); return isNaN(n) ? null : n; };
+  return {
+    _isBT: true,
+    on:         s.on === '1',
+    fwdKw:      pf(s.fwdkw),
+    fwdDbm:     pf(s.fwddbm),
+    fwdPct:     pf(s.fwdpct),
+    reflKw:     pf(s.reflkw),
+    reflDbm:    pf(s.refldbm),
+    vswr:       pf(s.vswr),
+    efficiency: s.efficiency || null,
+    returnLoss: pf(s.returnloss),
+    temp:       pf(s.temp),
+    rpiTemp:    pf(json.internal?.rpi?.cpuTemp),
+    hasAlarms:  b.hasalarms === '1',
+    hasMemAlarms: b.hasmemoryalarms === '1',
+    opMode:     b.operationalmode || null,
+    station:    a.station  || null,
+    frequency:  a.frequency || null,
+    model:      a.model    || null,
+    firmware:   a.firmware || null,
+    nominalPower: a.nominalpower || null,
+    audioProgram: c.audioprogram || null,
+    sync:       c.sync  || null,
+    exciter:    c.excit || null,
+    mpx:        pf(m.mpx),
+    dev:        pf(m.dev),
+    auto1:      c.auto1state === '1',
+    auto2:      c.auto2state === '1',
+  };
+}
+
+/* ── BT WEBSOCKET ── */
+const btWs = {};
+
+function btWsUrl(httpUrl) {
+  try {
+    const u = new URL(httpUrl);
+    return `ws://${u.hostname}:9001/`;
+  } catch { return null; }
+}
+
+function startBTConn(stn) {
+  stopBTConn(stn.id);
+  const wsUrl = btWsUrl(stn.url);
+  if (!wsUrl) { live[stn.id] = { data: null, err: 'URL inválida para BT', loading: false, ts: null }; return; }
+  live[stn.id] = { data: live[stn.id]?.data || null, err: null, loading: true, ts: live[stn.id]?.ts || null };
+  const ws = new WebSocket(wsUrl);
+  btWs[stn.id] = ws;
+  ws.onopen = () => {};
+  ws.onmessage = e => {
+    try {
+      const json = JSON.parse(e.data);
+      if (!json || typeof json !== 'object' || !json.state) return;
+      live[stn.id] = { data: parseBTData(json), err: null, loading: false, ts: Date.now() };
+      document.getElementById('globalTs').textContent = 'Última atualização: ' + new Date().toLocaleTimeString('pt-BR');
+      renderAll();
+    } catch {}
+  };
+  ws.onerror = () => {
+    live[stn.id] = { data: live[stn.id]?.data || null, err: 'Erro WebSocket BT', loading: false, ts: live[stn.id]?.ts || null };
+    renderAll();
+  };
+  ws.onclose = () => {
+    if (btWs[stn.id] === ws) {
+      live[stn.id] = { data: live[stn.id]?.data || null, err: 'Conexão BT encerrada', loading: false, ts: live[stn.id]?.ts || null };
+      renderAll();
+      // reconnect after 10s
+      setTimeout(() => { if (btWs[stn.id] === ws) startBTConn(stn); }, 10000);
+    }
+  };
+}
+
+function stopBTConn(id) {
+  const ws = btWs[id];
+  if (ws) { ws.onclose = null; ws.close(); delete btWs[id]; }
+}
+
+/* ── STATUS HELPERS ── */
+function pwrSt(d) {
+  if (d.fwd.w==null||d.fwd.tgt==null) return 'n';
+  const p = d.fwd.w/d.fwd.tgt*100;
+  if (p<75||p>115) return 'cr'; if (p<90||p>107) return 'wn'; return 'ok';
+}
+function vswrSt(v) { if(v==null) return 'n'; if(v>2.0) return 'cr'; if(v>1.5) return 'wn'; return 'ok'; }
+function tmpSt(t) { if(t==null) return 'n'; if(t>65) return 'cr'; if(t>50) return 'wn'; return 'ok'; }
+function phSt(v) { if(v==null) return 'n'; const d=Math.abs(v-220)/220*100; if(d>15) return 'cr'; if(d>8) return 'wn'; return 'ok'; }
+function stClass(s) { return s==='ok'?'ok':s==='wn'?'wn':'cr'; }
+
+/* ── RENDER HELPERS ── */
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') }
+function n(v,d=1) { return v==null||isNaN(v) ? '—' : parseFloat(v).toFixed(d) }
+function pct(v,mx) { return v==null ? 0 : Math.min(100,Math.max(0,v/mx*100)) }
+
+const hasTelemetryUrl = s => s.url && !s.url.includes('IP:') && s.url.trim() !== '';
+
+/* ── STATUS ÚNICO (dot do card, sidebar, barra de resumo) ── */
+function stationStatus(stn) {
+  let base;
+  if (stn.txType === 'bt') {
+    const st = live[stn.id]; const d = st?.data;
+    base = (st?.loading && !d) ? 'loading' : !d ? 'err' : d.hasAlarms ? 'err' : 'ok';
+  } else if (hasTelemetryUrl(stn)) {
+    const st = live[stn.id]; const d = st?.data;
+    base = (st?.loading && !d) ? 'loading' : !d ? 'err' : d.faults ? 'err' : 'ok';
+  } else if (stn.streamUrl) {
+    const ss = liveStream[stn.id];
+    base = (!ss || (ss.loading && !ss.sources?.length)) ? 'loading' : ss.online ? 'ok' : 'err';
+  } else {
+    base = 'ok';
+  }
+  if (base !== 'err') {
+    for (const gen of (stn.generators||[])) {
+      const gd = liveGen[gen.id]?.data;
+      if (gd?.fault || gd?.link === false || genModbusFault(gen.id)) { base = 'err'; break; }
+    }
+  }
+  return base;
+}
+
+const stationHasContent = s => hasTelemetryUrl(s)
+  || (s.streamUrl && s.streamUrl.trim() !== '')
+  || (s.generators||[]).some(g => g.url && g.url.trim() !== '');
+
+function groupWorstStatus(gr) {
+  const visible = gr.stations.filter(stationHasContent);
+  const rank = { ok:0, loading:1, err:2 };
+  let worst = 'ok';
+  visible.forEach(s => { const st = stationStatus(s); if (rank[st] > rank[worst]) worst = st; });
+  (gr.generators||[]).forEach(gen => {
+    const gs = liveGen[gen.id];
+    const st = (!gs || (gs.loading && !gs.data)) ? 'loading' : (gs.data?.fault || gs.data?.link === false || genModbusFault(gen.id)) ? 'err' : 'ok';
+    if (rank[st] > rank[worst]) worst = st;
+  });
+  return { worst, count: visible.length };
+}
+
+/* ── BT CARD RENDER ── */
+function renderBTCard(stn, st, opts = {}) {
+  const { data:d, err, loading } = st || { data:null, err:null, loading:true };
+  const ss = liveStream[stn.id];
+
+  const dotCls = loading && !d ? 'dot dot-ld' : err && !d ? 'dot dot-err'
+               : d ? (d.hasAlarms ? 'dot dot-err' : 'dot dot-ok') : 'dot dot-err';
+
+  let body = '';
+  if (loading && !d) {
+    body = `<div class="c-state"><span class="c-state-ico">⟳</span><div class="c-state-msg">Conectando BT via WebSocket...</div><div class="c-state-sub">${esc(stn.url)}</div></div>`;
+  } else if (err && !d) {
+    body = `<div class="c-state"><span class="c-state-ico">⚡</span><div class="c-state-msg">Sem resposta do transmissor BT</div><div class="c-state-sub">${esc(err)}</div></div>`;
+  } else if (d) {
+    const vswrCl  = d.vswr == null ? '' : d.vswr > 2.0 ? 'cr' : d.vswr > 1.5 ? 'wn' : 'ok';
+    const tempCl  = d.temp == null ? '' : d.temp > 65 ? 'cr' : d.temp > 50 ? 'wn' : 'ok';
+
+    const mkVU = (label, val, maxVal, unit) => {
+      if (val == null) return '';
+      const pct = Math.min(100, Math.max(0, (val / maxVal) * 100));
+      const maskH = (100 - pct).toFixed(1);
+      const valStr = val % 1 === 0 ? val.toFixed(0) : val.toFixed(1);
+      return `<div class="vu-vert">
+        <div class="vu-vert-lbl">${label}</div>
+        <div class="vu-vert-track" style="background:linear-gradient(to top,var(--good) 0%,var(--good) 70%,var(--warn) 70%,var(--warn) 88%,var(--crit) 88%,var(--crit) 100%);position:relative">
+          <div style="position:absolute;top:0;left:0;right:0;height:${maskH}%;background:var(--surf);transition:height .4s ease"></div>
+        </div>
+        <div class="vu-vert-val">${valStr}<br><span style="color:var(--muted)">${unit}</span></div>
+      </div>`;
+    };
+    const alarmBar = d.hasAlarms
+      ? `<div class="fault-bar"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 22 20 2 20"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> ALARME ATIVO${d.hasMemAlarms?' · Alarmes em memória':''}</div>` : '';
+
+    const fwdColor = d.fwdKw == null ? 'color:var(--num)'
+      : d.fwdPct != null && (d.fwdPct < 75 || d.fwdPct > 115) ? 'color:var(--crit)'
+      : d.fwdPct != null && (d.fwdPct < 90 || d.fwdPct > 107) ? 'color:var(--warn)'
+      : 'color:var(--num)';
+
+    const audioLine = [
+      d.audioProgram ? `Áudio: ${d.audioProgram}` : '',
+      d.sync         ? `Sync: ${d.sync}` : '',
+      d.exciter      ? `Excit: ${d.exciter.toUpperCase()}` : '',
+    ].filter(Boolean).join(' · ');
+
+    const autoLine = [
+      d.auto1 ? 'Auto 1 ON' : '',
+      d.auto2 ? 'Auto 2 ON' : '',
+    ].filter(Boolean).join(' · ');
+
+    body = `
+      ${alarmBar}
+      <div class="m-grid">
+        <div class="m-sec">
+          <div class="sec-lbl">Potência RF Direta</div>
+          <div class="pwr-big">
+            <span class="pwr-num" style="${fwdColor}">${d.fwdKw != null ? d.fwdKw.toFixed(2) : '—'}</span>
+            <span class="pwr-unit">kW</span>
+          </div>
+          ${d.fwdDbm != null ? `<div class="pwr-tgt">${d.fwdDbm} dBm${d.fwdPct != null ? ' · '+d.fwdPct.toFixed(1)+'%' : ''}</div>` : ''}
+          <div class="ref-row" style="margin-top:8px">
+            <div class="mm"><span class="mm-lbl">Refletida</span><span class="mm-val">${d.reflKw != null ? d.reflKw.toFixed(2)+' kW' : '—'}</span></div>
+            <div class="mm"><span class="mm-lbl">VSWR</span><span class="mm-val ${vswrCl}">${d.vswr != null ? d.vswr.toFixed(2) : '—'}</span></div>
+            <div class="mm"><span class="mm-lbl">Ret. Loss</span><span class="mm-val">${d.returnLoss != null ? d.returnLoss.toFixed(1)+' dB' : '—'}</span></div>
+          </div>
+          ${d.efficiency ? `<div style="margin-top:6px;font-size:11px;color:var(--muted)">Eficiência: <strong style="color:var(--txt)">${d.efficiency}</strong></div>` : ''}
+        </div>
+        <div class="m-sec">
+          <div class="sec-lbl">Sistema</div>
+          <div class="ref-row">
+            <div class="mm"><span class="mm-lbl">Temp. TX</span><span class="mm-val ${tempCl}">${d.temp != null ? d.temp.toFixed(1)+' °C' : '—'}</span></div>
+            ${d.rpiTemp != null ? `<div class="mm"><span class="mm-lbl">Temp. CPU</span><span class="mm-val ${d.rpiTemp > 75 ? 'cr' : d.rpiTemp > 60 ? 'wn' : ''}">${d.rpiTemp.toFixed(1)} °C</span></div>` : ''}
+          </div>
+          ${audioLine ? `<div style="margin-top:10px;font-size:11px;color:var(--muted)">${audioLine}</div>` : ''}
+          ${autoLine  ? `<div style="margin-top:4px;font-size:11px;color:var(--accent)">${autoLine}</div>` : ''}
+          ${d.opMode  ? `<div style="margin-top:4px;font-size:11px;color:var(--muted)">Modo: <strong style="color:var(--txt)">${d.opMode}</strong></div>` : ''}
+          ${d.firmware ? `<div style="margin-top:4px;font-size:10px;color:var(--muted)">fw ${d.firmware}</div>` : ''}
+        </div>
+        <div class="m-sec" style="display:flex;flex-direction:column;align-items:center;justify-content:center">
+          ${(d.mpx != null || d.dev != null) ? `<div class="vu-pair">${mkVU('DEV', d.dev, 75, 'kHz')}${mkVU('MPX', d.mpx, 100, '%')}</div>` : ''}
+        </div>
+      </div>`;
+  }
+
+  const stationLine = d?.station ? `<span class="chip">${esc(d.station)}</span>` : '';
+  const freqLine    = d?.frequency ? `<strong style="color:var(--accent)">${esc(d.frequency)}</strong>` : '';
+  const modelLine   = d?.model || 'BT';
+  const onBadge = !d ? '' : d.on
+    ? `<span class="pill on" style="font-size:9px;padding:2px 8px;font-weight:800">NO AR</span>`
+    : `<span class="pill" style="font-size:9px;padding:2px 8px;font-weight:800;background:var(--surf2);color:var(--muted)">OFF</span>`;
+
+  const innerContent = `${body}`
+    + (stn.streamUrl ? renderStreamSection(stn, ss) : '')
+    + (stn.generators||[]).map(gen => renderGenSection(gen, liveGen[gen.id], { compact: opts.compact })).join('');
+
+  if (opts.bodyOnly) return innerContent;
+
+  return `<div class="card${d?.hasAlarms?' fault':''}" id="card-${stn.id}">
+    <div class="c-head">
+      <div class="c-head-l">
+        <span class="${dotCls}"></span>
+        <div>
+          <div class="stn-name">${esc(stn.name)}</div>
+          <div class="stn-meta">${freqLine}${stationLine}<span style="font-size:10px;color:var(--muted)">${modelLine}</span></div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px">
+        ${onBadge}
+        <svg id="cchev-${stn.id}" class="grp-chev${cardCollapsed[stn.id]?'':' open'}" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+    </div>
+    <div id="cbody-${stn.id}"${cardCollapsed[stn.id]?' style="display:none"':''}>
+      ${innerContent}
+    </div>
+  </div>`;
+}
+
+/* ── CARD RENDER ── */
+function renderCard(stn, st, opts = {}) {
+  if (stn.txType === 'bt') return renderBTCard(stn, st, opts);
+
+  // Streaming/generator-only card (no telemetry URL configured)
+  if (!hasTelemetryUrl(stn)) {
+    const ss = liveStream[stn.id];
+    const online = ss?.online;
+    const dotCls = !ss || (ss.loading && !ss.sources?.length) ? 'dot dot-ld' : online ? 'dot dot-ok' : 'dot dot-err';
+    const innerContent = (stn.streamUrl ? renderStreamSection(stn, ss) : '')
+      + (stn.generators||[]).map(gen => renderGenSection(gen, liveGen[gen.id], { compact: opts.compact })).join('');
+    if (opts.bodyOnly) return innerContent;
+    return `<div class="card" id="card-${stn.id}">
+      <div class="c-head">
+        <div class="c-head-l">
+          <span class="${dotCls}"></span>
+          <div><div class="stn-name">${esc(stn.name)}</div></div>
+        </div>
+        <svg id="cchev-${stn.id}" class="grp-chev${cardCollapsed[stn.id]?'':' open'}" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <div id="cbody-${stn.id}"${cardCollapsed[stn.id]?' style="display:none"':''}>
+        ${innerContent}
+      </div>
+    </div>`;
+  }
+
+  const { data:d, err, loading } = st||{ data:null, err:null, loading:true };
+  const hasFault = d && d.faults;
+  const dotCls = loading&&!d ? 'dot dot-ld' : err&&!d ? 'dot dot-err' : 'dot dot-ok';
+
+  let body = '';
+
+  if (loading && !d) {
+    body = `<div class="c-state"><span class="c-state-ico">⟳</span><div class="c-state-msg">Conectando...</div><div class="c-state-sub">${esc(stn.url)}</div></div>`;
+  } else if (err && !d) {
+    body = `<div class="c-state"><span class="c-state-ico">⚡</span><div class="c-state-msg">Sem resposta do transmissor</div><div class="c-state-sub">${esc(stn.url)}</div><div class="cors-hint"><strong>Dica:</strong> Abra este arquivo <code>dashboard.html</code> diretamente no navegador a partir de um PC na mesma rede do transmissor.<br>Erro: ${esc(err)}</div></div>`;
+  } else if (d) {
+    const ps = pwrSt(d);
+    const vs = vswrSt(d.ref.vswr);
+    const ts = tmpSt(d.temp);
+    const pwrPct = d.fwd.w&&d.fwd.tgt ? Math.min(100,d.fwd.w/d.fwd.tgt*100) : 0;
+    const tPct = pct(d.temp, 80);
+    const numCol = ps==='ok' ? 'color:var(--num)' : ps==='wn' ? 'color:var(--warn)' : 'color:var(--crit)';
+
+    const gridHtml = d.grid ? `
+      <div style="margin-top:10px">
+        <div class="sec-lbl" style="margin-bottom:5px">Rede Elétrica</div>
+        <div class="phase-row">
+          <span class="ph ${phSt(d.grid.r)}">R ${d.grid.r}V</span>
+          <span class="ph ${phSt(d.grid.s)}">S ${d.grid.s}V</span>
+          <span class="ph ${phSt(d.grid.t)}">T ${d.grid.t}V</span>
+        </div>
+        <div class="bat-row">🔋 <span class="bat-v">${n(d.grid.bat)} V</span> <span>(${d.grid.batA>=0?'+':''}${n(d.grid.batA)} A)</span></div>
+      </div>` : '';
+
+    const rfinHtml = d.rfin ? `
+      <div style="margin-top:10px">
+        <div class="sec-lbl" style="margin-bottom:5px">Entrada RF</div>
+        <div class="ref-row">
+          <div class="mm"><span class="mm-lbl">Potência</span><span class="mm-val">${n(d.rfin.w)} W</span></div>
+          <div class="mm"><span class="mm-lbl">Tensão</span><span class="mm-val">${n(d.rfin.v)} V</span></div>
+          <div class="mm"><span class="mm-lbl">Corrente</span><span class="mm-val">${n(d.rfin.a)} A</span></div>
+        </div>
+      </div>` : '';
+
+    body = `
+      ${hasFault ? `<div class="fault-bar"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 22 20 2 20"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> FALHA DETECTADA: ${esc(d.faults)}</div>` : ''}
+      <div class="m-grid">
+        <div class="m-sec">
+          <div class="sec-lbl">Potência RF Direta</div>
+          <div class="pwr-big">
+            <span class="pwr-num" style="${numCol}">${d.fwd.w!=null ? (d.fwd.w/1000).toFixed(2) : '—'}</span>
+            <span class="pwr-unit">kW</span>
+          </div>
+          <div class="pwr-tgt">Alvo: ${d.fwd.tgt!=null ? (d.fwd.tgt/1000).toFixed(2) : '—'} kW · ${pwrPct>0 ? pwrPct.toFixed(0)+'%' : '—'}</div>
+          <div class="bar-wrap"><div class="bar-fill ${stClass(ps)}" style="width:${pwrPct}%"></div></div>
+          <div class="ref-row">
+            <div class="mm"><span class="mm-lbl">Refletida</span><span class="mm-val">${d.ref.w!=null ? (d.ref.w/1000).toFixed(2) : '—'} kW</span></div>
+            <div class="mm"><span class="mm-lbl">VSWR</span><span class="mm-val ${stClass(vs)}">${d.ref.vswr!=null ? d.ref.vswr.toFixed(2) : '—'}:1</span></div>
+            <div class="mm"><span class="mm-lbl">Ret. Loss</span><span class="mm-val">${n(d.ref.rl)} dB</span></div>
+          </div>
+        </div>
+        <div class="m-sec">
+          <div class="sec-lbl">Alimentação PA</div>
+          <div style="margin-bottom:8px">
+            <div class="mm-lbl" style="margin-bottom:3px">Tensão VPA</div>
+            <div style="display:flex;align-items:baseline;gap:4px"><span class="pa-v">${n(d.vpa)}</span><span style="color:var(--muted);font-size:12px">V</span></div>
+          </div>
+          ${d.ipa ? `<div>
+            <div class="mm-lbl" style="margin-bottom:3px">Corrente IPA Total</div>
+            <div style="display:flex;align-items:baseline;gap:4px"><span class="pa-v">${n(d.ipa.tot)}</span><span style="color:var(--muted);font-size:12px">A</span></div>
+            <div class="pa-stages">${n(d.ipa.a1)} A · ${n(d.ipa.a2)} A · ${n(d.ipa.a3)} A</div>
+          </div>` : ''}
+          ${gridHtml}
+        </div>
+        <div class="m-sec">
+          <div class="sec-lbl">Temperatura</div>
+          <div class="tmp-big ${stClass(ts)}">${n(d.temp)}°C</div>
+          <div class="tmp-bar-wrap"><div class="tmp-bar-fill" style="width:${tPct}%"></div></div>
+          ${rfinHtml}
+        </div>
+      </div>
+      <div class="b-grid">
+        <div class="aud-sec">
+          <div class="sec-lbl">Áudio</div>
+          <div class="mpx-row">
+            <span class="pill n" style="font-size:10px">${esc(d.mpx)}</span>
+            <span class="mm-lbl">MPX: ${d.mpx2}</span>
+          </div>
+          <div class="aud-meters">
+            <div class="aud-row"><span class="aud-ch">L</span><div class="aud-bw"><div class="aud-bf" style="width:${Math.min(100,d.left)}%"></div></div><span class="aud-n">${d.left}</span></div>
+            <div class="aud-row"><span class="aud-ch">R</span><div class="aud-bw"><div class="aud-bf" style="width:${Math.min(100,d.right)}%"></div></div><span class="aud-n">${d.right}</span></div>
+          </div>
+        </div>
+        <div class="sts-sec">
+          <div class="sec-lbl">Status</div>
+          <div class="sts-pills">
+            <span class="pill ${d.rf?'on':'off'}"><span class="pill-d"></span>RF ${d.rf?'ON':'OFF'}</span>
+            <span class="pill ${d.rds?'on':'off'}"><span class="pill-d"></span>RDS ${d.rds?'ON':'OFF'}</span>
+            ${d.freq ? `<span class="pill ac"><span class="pill-d"></span>${esc(d.freq)}</span>` : ''}
+            ${d.preset ? `<span class="pill n">${esc(d.preset)}</span>` : ''}
+          </div>
+          ${d.time ? `<div class="sts-time">Relógio do dispositivo: <strong style="color:var(--txt)">${esc(d.time)}</strong></div>` : ''}
+        </div>
+      </div>
+      <div class="c-foot">
+        <div style="display:flex;align-items:center;gap:6px">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Uptime: <strong>${esc(d.uptime)}</strong>
+        </div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap">
+          ${d.pll ? `<span>${esc(d.pll)}</span>` : ''}
+          ${d.psu ? `<span>${esc(d.psu)}</span>` : ''}
+        </div>
+        ${st.ts ? `<span>Atualizado: ${new Date(st.ts).toLocaleTimeString('pt-BR')}</span>` : ''}
+      </div>`;
+  }
+
+  const innerContent = `${body}`
+    + (stn.streamUrl ? renderStreamSection(stn, liveStream[stn.id]) : '')
+    + (stn.generators||[]).map(gen => renderGenSection(gen, liveGen[gen.id], { compact: opts.compact })).join('');
+
+  if (opts.bodyOnly) return innerContent;
+
+  return `<div class="card ${d&&d.faults?'fault':''}" id="card-${stn.id}">
+    <div class="c-head">
+      <div class="c-head-l">
+        <span class="${dotCls}"></span>
+        <div>
+          <div class="stn-name">${esc(stn.name)}</div>
+          <div class="stn-meta">
+            ${d?.freq ? `<strong>${esc(d.freq)}</strong>` : ''}
+            ${d?.model ? `<span class="chip">${esc(d.model)}</span>` : ''}
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        ${d ? `<span class="rf-badge ${d.rf?'on':'off'}">● RF ${d.rf?'ON':'OFF'}</span>` : ''}
+        ${err&&d ? `<span style="color:var(--warn);font-size:10px">⚠ Falha na atualização</span>` : ''}
+        <svg id="cchev-${stn.id}" class="grp-chev${cardCollapsed[stn.id]?'':' open'}" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+    </div>
+    <div id="cbody-${stn.id}"${cardCollapsed[stn.id]?' style="display:none"':''}>
+      ${innerContent}
+    </div>
+  </div>`;
+}
+
+/* ── LINHA COMPACTA (densidade "compacto") ── */
+function renderCardCompact(stn, st) {
+  const expanded = !!rowExpanded[stn.id];
+  const status = stationStatus(stn);
+  const dotCls = 'dot dot-' + (status === 'ok' ? 'ok' : status === 'loading' ? 'ld' : 'err');
+  const miniPill = (cls, txt) => `<span class="pill ${cls}" style="font-size:9px;padding:2px 7px"><span class="pill-d"></span>${txt}</span>`;
+
+  let metricHtml = '', extraBadge = '';
+  if (stn.txType === 'bt') {
+    const d = st?.data;
+    const cls = !d ? '' : d.hasAlarms ? 'cr'
+      : (d.fwdPct != null && (d.fwdPct < 75 || d.fwdPct > 115)) ? 'cr'
+      : (d.fwdPct != null && (d.fwdPct < 90 || d.fwdPct > 107)) ? 'wn' : 'ok';
+    metricHtml = `<span class="row-compact-metric ${cls}">${d?.fwdKw != null ? d.fwdKw.toFixed(2) + ' kW' : '—'}</span>`;
+    extraBadge = !d ? '' : d.on ? miniPill('on', 'NO AR') : `<span class="pill" style="font-size:9px;padding:2px 7px;background:var(--surf2);color:var(--muted)"><span class="pill-d"></span>OFF</span>`;
+  } else if (hasTelemetryUrl(stn)) {
+    const d = st?.data;
+    const cls = d ? stClass(pwrSt(d)) : '';
+    metricHtml = `<span class="row-compact-metric ${cls}">${d?.fwd?.w != null ? (d.fwd.w/1000).toFixed(2) + ' kW' : '—'}</span>`;
+    extraBadge = d ? miniPill(d.rf ? 'on' : 'off', 'RF ' + (d.rf ? 'ON' : 'OFF')) : '';
+  } else if (stn.streamUrl) {
+    const ss = liveStream[stn.id];
+    const online = ss?.online;
+    extraBadge = miniPill(online ? 'on' : (ss && !ss.loading ? 'off' : 'n'), 'Stream');
+  }
+
+  const streamBadge = (stn.streamUrl && hasTelemetryUrl(stn))
+    ? miniPill(liveStream[stn.id]?.online ? 'on' : 'off', 'Stream')
+    : '';
+  const genBadge = genStatusBadge(stn.generators || []);
+
+  const row = `<div class="row-compact" data-station="${stn.id}">
+    <span class="${dotCls}"></span>
+    <span class="row-compact-name">${esc(stn.name)}</span>
+    <div class="row-compact-meta">
+      ${metricHtml}
+      ${extraBadge}
+      ${streamBadge}
+      ${genBadge}
+      <svg class="grp-chev${expanded ? ' open' : ''}" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+    </div>
+  </div>`;
+
+  const body = expanded ? `<div class="row-compact-body">${renderCard(stn, st, { bodyOnly: true, compact: true })}</div>` : '';
+  return `<div>${row}${body}</div>`;
+}
+
+/* ── STATE ── */
+let live = {};
+let timers = {};
+let liveStream = {};
+let streamTimers = {};
+let liveGen = {};
+let genTimers = {};
+let streamAlertSt = {}; // { [stnId]: { prevOnline: bool|null } }
+
+function genStatusBadge(gens) {
+  if (!gens?.length) return '';
+  const states = gens.map(gen => {
+    const gs = liveGen[gen.id]; const d = gs?.data;
+    if (!gs || (gs.loading && !d)) return 'loading';
+    if (!d || d.link === false) return 'nolink';
+    if (d.fault || genModbusFault(gen.id))   return 'fault';
+    if (d.running) return 'running';
+    return 'stopped';
+  });
+  const p = (cls, txt) => `<span class="pill ${cls}" style="font-size:9px;padding:2px 7px"><span class="pill-d"></span>${txt}</span>`;
+  if (states.every(s=>s==='loading'))  return `<span style="font-size:10px;color:var(--muted)">⟳ gerador...</span>`;
+  if (states.some(s=>s==='fault'))     return p('wn', 'Gerador ALARME');
+  if (states.some(s=>s==='nolink'))    return p('off', 'Gerador sem link');
+  if (states.every(s=>s==='running'))  return p('on', gens.length>1 ? 'Geradores em operação' : 'Gerador em operação');
+  if (states.some(s=>s==='running'))   return p('wn', 'Gerador parcial');
+  return p('n', gens.length>1 ? 'Geradores parados' : 'Gerador parado');
+}
+
+/* ── RESUMO GERAL / FILTRO ── */
+let activeFilter = null; // null | 'online' | 'offline' | 'faults' | 'gens' | 'streams'
+
+function computeSummary() {
+  const allStns = cfg.groups.flatMap(g => g.stations);
+  let online = 0, offline = 0, faults = 0;
+  allStns.forEach(s => {
+    let hasFault = false, noData = false, isLoading = false;
+    if (s.txType === 'bt') {
+      const st = live[s.id]; const d = st?.data;
+      if (st?.loading && !d) isLoading = true;
+      else if (!d) noData = true;
+      else if (d.hasAlarms) hasFault = true;
+    } else if (hasTelemetryUrl(s)) {
+      const st = live[s.id]; const d = st?.data;
+      if (st?.loading && !d) isLoading = true;
+      else if (!d) noData = true;
+      else if (d.faults) hasFault = true;
+    } else if (s.streamUrl) {
+      const ss = liveStream[s.id];
+      if (!ss || (ss.loading && !ss.sources?.length)) isLoading = true;
+      else if (!ss.online) noData = true;
+    }
+    (s.generators||[]).forEach(gen => { const gd = liveGen[gen.id]?.data; if (gd?.fault || gd?.link === false || genModbusFault(gen.id)) hasFault = true; });
+    if (hasFault) faults++;
+    if (noData) offline++;
+    if (!hasFault && !noData && !isLoading) online++;
+  });
+  // Geradores compartilhados do grupo (não pertencem a uma rádio específica)
+  // também contam como alarme — senão um alarme nesse gerador nunca aparece
+  // no contador "Alarmes" do topo.
+  cfg.groups.forEach(gr => {
+    const grpFault = (gr.generators||[]).some(gen => {
+      const gd = liveGen[gen.id]?.data;
+      return gd?.fault || gd?.link === false || genModbusFault(gen.id);
+    });
+    if (grpFault) faults++;
+  });
+  const allGens = cfg.groups.flatMap(g => (g.generators||[]).concat(g.stations.flatMap(s => s.generators||[])));
+  const gensRunning = allGens.filter(g => liveGen[g.id]?.data?.running).length;
+  const streamStns = allStns.filter(s => s.streamUrl);
+  const streamsOnline = streamStns.filter(s => liveStream[s.id]?.online).length;
+  return { total: allStns.length, online, offline, faults,
+           gensTotal: allGens.length, gensRunning,
+           streamsTotal: streamStns.length, streamsOnline };
+}
+
+/* Só escreve no DOM quando o HTML realmente mudou — evita destruir/recriar
+   elementos (e "piscar" hover/foco) a cada poll quando nada mudou de fato. */
+const _lastHtml = {};
+function setHtmlIfChanged(el, key, html) {
+  if (_lastHtml[key] === html) return;
+  _lastHtml[key] = html;
+  el.innerHTML = html;
+}
+
+function renderSummaryBar() {
+  const el = document.getElementById('summaryBar');
+  if (!el) return;
+  const s = computeSummary();
+  if (!s.total) { setHtmlIfChanged(el, 'summaryBar', ''); return; }
+  const chip = (key, color, num, lbl) => `<div class="sum-chip${activeFilter===key?' active':''}" data-filter="${key}"><span class="sum-chip-dot" style="background:var(${color})"></span><span class="sum-chip-num">${num}</span><span class="sum-chip-lbl">${esc(lbl)}</span></div>`;
+  const parts = [
+    chip('all', '--muted', s.total, 'Rádios'),
+    chip('online', '--good', s.online, 'Online'),
+    chip('offline', '--crit', s.offline, 'Offline'),
+    chip('faults', '--crit', s.faults, 'Alarmes'),
+  ];
+  if (s.gensTotal) parts.push(chip('gens', '--warn', s.gensRunning + '/' + s.gensTotal, 'Geradores'));
+  if (s.streamsTotal) parts.push(chip('streams', '--accent', s.streamsOnline + '/' + s.streamsTotal, 'Streams'));
+  setHtmlIfChanged(el, 'summaryBar', parts.join(''));
+}
+
+function setFilter(key) {
+  activeFilter = (key === 'all' || activeFilter === key) ? null : key;
+  renderAll();
+}
+
+function stationMatchesFilter(stn) {
+  if (!activeFilter) return true;
+  if (activeFilter === 'online') return stationStatus(stn) === 'ok';
+  if (activeFilter === 'offline') {
+    if (stn.txType === 'bt' || hasTelemetryUrl(stn)) return !live[stn.id]?.data;
+    if (stn.streamUrl) { const ss = liveStream[stn.id]; return !!ss && !ss.loading && !ss.online; }
+    return false;
+  }
+  if (activeFilter === 'faults') {
+    if (stn.txType === 'bt' && live[stn.id]?.data?.hasAlarms) return true;
+    if (hasTelemetryUrl(stn) && live[stn.id]?.data?.faults) return true;
+    return (stn.generators||[]).some(gen => { const gd = liveGen[gen.id]?.data; return gd?.fault || gd?.link === false || genModbusFault(gen.id); });
+  }
+  if (activeFilter === 'gens') return (stn.generators||[]).length > 0;
+  if (activeFilter === 'streams') return !!stn.streamUrl;
+  return true;
+}
+
+/* ── SIDEBAR (navegação entre locais) ── */
+function renderSidebar() {
+  const el = document.getElementById('sidebar');
+  if (!el) return;
+  if (!cfg.groups.length) { setHtmlIfChanged(el, 'sidebar', '<div class="sb-empty">Nenhum local configurado.</div>'); return; }
+  const dotCls = { ok:'ok', warn:'wn', err:'cr', loading:'n' };
+  const items = cfg.groups.map(gr => {
+    const { worst, count } = groupWorstStatus(gr);
+    return `<div class="sb-item" data-group="${gr.id}" tabindex="0">
+      <span class="sb-dot ${dotCls[worst]||'n'}"></span>
+      <span class="sb-name">${esc(gr.name)}</span>
+      <span class="sb-count">${count}</span>
+    </div>`;
+  }).join('');
+  setHtmlIfChanged(el, 'sidebar', '<div class="sb-hd">Locais</div>' + items);
+}
+
+function scrollToGroup(gId) {
+  let el = document.getElementById('group-' + gId);
+  if (!el && activeFilter) { activeFilter = null; renderAll(); el = document.getElementById('group-' + gId); }
+  if (!el) return;
+  el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  el.classList.remove('flash');
+  void el.offsetWidth;
+  el.classList.add('flash');
+  setTimeout(() => el.classList.remove('flash'), 1100);
+}
+
+/* ── ARRANJO LIVRE DOS GRUPOS (arrastar para reorganizar) ──
+   2 colunas fixas; a posição de cada grupo é escolhida pelo usuário e persiste
+   entre sessões (independente de cfg, guardado à parte). */
+const LAYOUT_KEY = 'snMon_layout_v1';
+let groupLayout = null;
+function loadGroupLayout() {
+  try { groupLayout = JSON.parse(localStorage.getItem(LAYOUT_KEY)); } catch(e) { groupLayout = null; }
+  if (!groupLayout || !Array.isArray(groupLayout.cols) || !groupLayout.cols.length) groupLayout = { cols: [[], []] };
+}
+function saveGroupLayout() { try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(groupLayout)); } catch(e) {} }
+function ensureGroupLayout() {
+  if (!groupLayout) loadGroupLayout();
+  const knownIds = new Set(cfg.groups.map(g => g.id));
+  groupLayout.cols = groupLayout.cols.map(col => col.filter(id => knownIds.has(id)));
+  const placed = new Set(groupLayout.cols.flat());
+  let changed = false;
+  cfg.groups.forEach(gr => {
+    if (placed.has(gr.id)) return;
+    let shortest = 0;
+    for (let i = 1; i < groupLayout.cols.length; i++) if (groupLayout.cols[i].length < groupLayout.cols[shortest].length) shortest = i;
+    groupLayout.cols[shortest].push(gr.id);
+    placed.add(gr.id);
+    changed = true;
+  });
+  if (changed) saveGroupLayout();
+}
+
+let groupCollapsed = {};
+let cardCollapsed = {};
+let genCollapsed = {};
+const DENSITY_KEY = 'snMon_density_v1';
+let groupDensity = {};   // 'compact' | 'detailed' por grupo — persiste entre sessões
+let rowExpanded = {};    // expansão inline de uma linha compacta (não persiste, é só uma inspeção pontual)
+
+function loadGroupDensity() {
+  try { groupDensity = JSON.parse(localStorage.getItem(DENSITY_KEY)) || {}; } catch(e) { groupDensity = {}; }
+}
+function saveGroupDensity() { try { localStorage.setItem(DENSITY_KEY, JSON.stringify(groupDensity)); } catch(e) {} }
+
+function groupDensityOf(gr, visibleCount) {
+  if (!groupDensity[gr.id]) {
+    groupDensity[gr.id] = visibleCount > 4 ? 'compact' : 'detailed';
+    saveGroupDensity();
+  }
+  return groupDensity[gr.id];
+}
+function setGroupDensity(gId, mode) {
+  groupDensity[gId] = mode;
+  saveGroupDensity();
+  // troca de densidade é um reset explícito: os geradores voltam a seguir o
+  // padrão do novo modo (detalhado = abertos, compacto = recolhidos), mesmo
+  // que tivessem sido alternados manualmente antes.
+  const gr = cfg.groups.find(g => g.id === gId);
+  if (gr) {
+    const allGens = (gr.generators||[]).concat(gr.stations.flatMap(s => s.generators||[]));
+    allGens.forEach(gen => { delete genCollapsed[gen.id]; });
+  }
+  renderAll();
+}
+function toggleRow(sId) {
+  rowExpanded[sId] = !rowExpanded[sId];
+  renderAll();
+}
+function toggleGen(gId) {
+  const body = document.getElementById('genbody-' + gId);
+  const chev = document.getElementById('genchev-' + gId);
+  // considera o estado VISUAL atual (que pode vir do padrão do modo compacto,
+  // não só de um toggle manual anterior) pra alternar corretamente
+  const currentlyCollapsed = body ? body.style.display === 'none' : !!genCollapsed[gId];
+  const next = !currentlyCollapsed;
+  genCollapsed[gId] = next;
+  if (body) body.style.display = next ? 'none' : '';
+  if (chev) chev.classList.toggle('open', !next);
+}
+function toggleCard(sId) {
+  cardCollapsed[sId] = !cardCollapsed[sId];
+  const body = document.getElementById('cbody-' + sId);
+  const chev = document.getElementById('cchev-' + sId);
+  if (body) body.style.display = cardCollapsed[sId] ? 'none' : '';
+  if (chev) chev.classList.toggle('open', !cardCollapsed[sId]);
+}
+
+function toggleGroup(gId) {
+  groupCollapsed[gId] = !groupCollapsed[gId];
+  const body = document.getElementById('grpbody-' + gId);
+  const chev = document.getElementById('grpchev-' + gId);
+  if (body) body.classList.toggle('collapsed', !!groupCollapsed[gId]);
+  if (chev) chev.classList.toggle('open', !groupCollapsed[gId]);
+}
+
+/* ── ARRASTAR GRUPO PARA REORGANIZAR ── */
+let groupDragState = null;
+function startGroupDrag(e, gId) {
+  if (e.button !== 0) return; // só botão esquerdo
+  const el = document.getElementById('group-' + gId);
+  if (!el) return;
+  e.preventDefault();
+  groupDragState = { id: gId, el };
+  el.classList.add('dragging');
+  document.body.classList.add('dragging-group');
+}
+function moveGroupDrag(clientX, clientY) {
+  if (!groupDragState) return;
+  const { el } = groupDragState;
+  const target = document.elementFromPoint(clientX, clientY);
+  if (!target) return;
+  const col = target.closest('.stn-col');
+  if (!col) return;
+  const overGroup = target.closest('.group');
+  if (overGroup && overGroup !== el) {
+    const rect = overGroup.getBoundingClientRect();
+    const before = clientY < rect.top + rect.height / 2;
+    col.insertBefore(el, before ? overGroup : overGroup.nextSibling);
+  } else if (!overGroup && (el.parentElement !== col || col.lastElementChild !== el)) {
+    col.appendChild(el);
+  }
+}
+function finishGroupDrag() {
+  if (!groupDragState) return;
+  groupDragState.el.classList.remove('dragging');
+  document.body.classList.remove('dragging-group');
+  const cols = Array.from(document.querySelectorAll('#stnGrid > .stn-col'));
+  groupLayout.cols = cols.map(col => Array.from(col.children)
+    .filter(c => c.classList.contains('group'))
+    .map(c => c.id.replace(/^group-/, '')));
+  saveGroupLayout();
+  groupDragState = null;
+}
+document.addEventListener('mousemove', e => { if (groupDragState) moveGroupDrag(e.clientX, e.clientY); });
+document.addEventListener('mouseup', () => { if (groupDragState) finishGroupDrag(); });
+
+function renderGroup(gr) {
+  const gens = gr.generators||[];
+  const isCollapsed = !!groupCollapsed[gr.id];
+  const visibleAll = gr.stations.filter(stationHasContent);
+  const visible = activeFilter ? visibleAll.filter(stationMatchesFilter) : visibleAll;
+  // Gerador compartilhado do grupo com alarme mantém o grupo visível no filtro
+  // "Alarmes" mesmo que nenhuma rádio individual esteja com problema — o
+  // alarme não pertence a nenhuma rádio específica, mas precisa aparecer.
+  const grpGenFault = activeFilter === 'faults' && (gr.generators||[]).some(gen => {
+    const gd = liveGen[gen.id]?.data;
+    return gd?.fault || gd?.link === false || genModbusFault(gen.id);
+  });
+  if (activeFilter && !visible.length && !grpGenFault) return '';
+  const stnCount = visible.length;
+  const density = groupDensityOf(gr, visibleAll.length);
+
+  let cardsHtml;
+  if (!stnCount) {
+    cardsHtml = `<div class="group-cards"><div style="padding:20px;color:var(--muted);font-size:12px">Nenhuma rádio configurada neste grupo.</div></div>`;
+  } else if (density === 'compact') {
+    cardsHtml = `<div class="group-rows">${visible.map(s => renderCardCompact(s, live[s.id]||{data:null,err:null,loading:true,ts:null})).join('')}</div>`;
+  } else {
+    cardsHtml = `<div class="group-cards">${visible.map(s => renderCard(s, live[s.id]||{data:null,err:null,loading:true,ts:null})).join('')}</div>`;
+  }
+
+  const densityToggle = stnCount ? `<div class="density-toggle">
+    <button type="button" class="density-btn${density==='compact'?' active':''}" onclick="event.stopPropagation();setGroupDensity('${gr.id}','compact')">Compacto</button>
+    <button type="button" class="density-btn${density==='detailed'?' active':''}" onclick="event.stopPropagation();setGroupDensity('${gr.id}','detailed')">Detalhado</button>
+  </div>` : '';
+
+  return `<div class="group" id="group-${gr.id}">
+    <div class="group-hd" onclick="toggleGroup('${gr.id}')">
+      <div class="group-loc">
+        <span class="grp-drag-handle" title="Arrastar para reorganizar" onmousedown="event.stopPropagation();startGroupDrag(event,'${gr.id}')">
+          <svg width="10" height="14" viewBox="0 0 10 16" fill="currentColor"><circle cx="2" cy="2" r="1.4"/><circle cx="8" cy="2" r="1.4"/><circle cx="2" cy="8" r="1.4"/><circle cx="8" cy="8" r="1.4"/><circle cx="2" cy="14" r="1.4"/><circle cx="8" cy="14" r="1.4"/></svg>
+        </span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:.4;flex-shrink:0"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+        <span class="group-name">${esc(gr.name)}</span>
+        <span class="grp-count">${stnCount} rádio${stnCount!==1?'s':''}</span>
+      </div>
+      <div class="group-hd-right">
+        ${densityToggle}
+        ${genStatusBadge(gens)}
+        <svg id="grpchev-${gr.id}" class="grp-chev ${isCollapsed?'':'open'}" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+    </div>
+    <div id="grpbody-${gr.id}" class="group-body${isCollapsed?' collapsed':''}">
+      ${cardsHtml}
+      ${gens.map(gen => renderGenSection(gen, liveGen[gen.id], { compact: density === 'compact' })).join('')}
+    </div>
+  </div>`;
+}
+
+/* Evita que um poll troque o innerHTML bem no meio de um clique real do mouse
+   (mousedown -> DOM é substituído -> mouseup nunca encontra o elemento -> clique
+   "some" sem erro nenhum). Adia a re-renderização até soltar o botão. */
+let mouseDownActive = false;
+let renderPending = false;
+document.addEventListener('mousedown', () => { mouseDownActive = true; }, true);
+document.addEventListener('mouseup', () => {
+  mouseDownActive = false;
+  // NÃO renderiza aqui de forma síncrona: 'click' ainda vai disparar logo em seguida
+  // (mouseup -> click, na mesma sequência) mirando no elemento atual. Se a re-renderização
+  // rodar agora, ela pode trocar/mover justamente esse elemento antes do 'click' chegar,
+  // e o clique se perde (foi exatamente isso que causou o 3º grupo não recolher).
+  // setTimeout(0) empurra a renderização pra depois do 'click' já ter sido processado.
+  if (renderPending) { renderPending = false; setTimeout(renderAllNow, 0); }
+}, true);
+
+function renderAll() {
+  if (mouseDownActive) { renderPending = true; return; }
+  renderAllNow();
+}
+
+function renderAllNow() {
+  const g = document.getElementById('stnGrid');
+  if (!g) return;
+  renderSidebar();
+  renderSummaryBar();
+  renderRankingPanel();
+  if (document.getElementById('rankingModal')?.classList.contains('open')) renderRankingBody();
+  const allEmpty = !cfg.groups.length || cfg.groups.every(gr => !gr.stations.length);
+  if (allEmpty) {
+    setHtmlIfChanged(g, 'stnGrid', `<div class="empty"><div style="font-size:48px;margin-bottom:14px;opacity:.25">📡</div><h2>Nenhum grupo configurado</h2><p>Clique em Configurações e adicione um grupo e uma rádio.</p><button class="btn btn-p" onclick="addGroup();openCfg()">Adicionar Grupo</button></div>`);
+    return;
+  }
+
+  const htmlById = {};
+  cfg.groups.forEach(gr => { htmlById[gr.id] = renderGroup(gr); });
+  const visibleIds = new Set(cfg.groups.filter(gr => htmlById[gr.id].trim()).map(gr => gr.id));
+  if (!visibleIds.size) {
+    setHtmlIfChanged(g, 'stnGrid', `<div class="empty"><div style="font-size:48px;margin-bottom:14px;opacity:.25">🔍</div><h2>Nenhuma rádio corresponde ao filtro</h2><p>Limpe o filtro na barra de resumo para ver todas as rádios.</p><button class="btn btn-p" onclick="setFilter('all')">Limpar filtro</button></div>`);
+    return;
+  }
+
+  ensureGroupLayout();
+  _lastHtml.stnGrid = '__columns__';
+
+  // veio do placeholder "vazio" → limpa antes de montar as colunas
+  if (Array.from(g.children).some(c => !c.classList.contains('stn-col'))) g.innerHTML = '';
+
+  let cols = Array.from(g.children).filter(c => c.classList.contains('stn-col'));
+  while (cols.length < groupLayout.cols.length) { const c = document.createElement('div'); c.className = 'stn-col'; g.appendChild(c); cols.push(c); }
+  while (cols.length > groupLayout.cols.length) { cols.pop().remove(); }
+
+  // Posiciona cada grupo na coluna/ordem salva. Só recria o nó de um grupo se o
+  // conteúdo dele mudou de verdade (preserva hover/scroll dos demais); mover um
+  // nó existente (drag, reordenação) é só um insertBefore — nunca destrói o nó.
+  groupLayout.cols.forEach((colIds, colIdx) => {
+    const colEl = cols[colIdx];
+    let prevEl = null;
+    colIds.forEach(id => {
+      if (!visibleIds.has(id)) return;
+      const html = htmlById[id];
+      let el = document.getElementById('group-' + id);
+      if (_lastHtml['group-' + id] !== html) {
+        _lastHtml['group-' + id] = html;
+        const tmp = document.createElement('div');
+        tmp.innerHTML = html;
+        const fresh = tmp.firstElementChild;
+        if (el) el.replaceWith(fresh);
+        el = fresh;
+      } else if (!el) {
+        const tmp = document.createElement('div');
+        tmp.innerHTML = html;
+        el = tmp.firstElementChild;
+      }
+      const needsMove = prevEl ? prevEl.nextElementSibling !== el : colEl.firstElementChild !== el;
+      if (needsMove) {
+        if (prevEl) prevEl.insertAdjacentElement('afterend', el);
+        else colEl.insertBefore(el, colEl.firstChild);
+      }
+      prevEl = el;
+    });
+    while (colEl.lastElementChild && colEl.lastElementChild !== prevEl) colEl.lastElementChild.remove();
+    if (!prevEl) colEl.innerHTML = '<div class="stn-col-empty">Arraste um grupo para cá</div>';
+  });
+}
+
+/* ── POLLING ── */
+// Alguns transmissores (ex.: XT, firmware lwIP) exigem login por formulário
+// antes de liberar a telemetria — sem cookie de sessão por cliente, é um
+// estado de autenticação global do próprio equipamento (por isso logar pelo
+// navegador "destrava" pra qualquer cliente, inclusive este app). Quando a
+// leitura falha e há usuário/senha configurados, tenta logar de novo e refaz
+// a leitura uma vez antes de desistir.
+function xtOrigin(url) {
+  try { return new URL(url).origin; } catch(e) { return null; }
+}
+
+async function xtLogin(stn) {
+  const origin = xtOrigin(stn.url);
+  if (!origin || !stn.authUser) return { ok: false, reason: 'sem credenciais configuradas' };
+  try {
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), 8000);
+    const body = new URLSearchParams({ user: stn.authUser, pass: stn.authPass || '', fim: 'FIM:' });
+    const res = await fetch(origin + '/index.html', { method: 'POST', body, signal: ctrl.signal });
+    clearTimeout(tid);
+    const txt = await res.text();
+    if (!res.ok) return { ok: false, reason: `HTTP ${res.status} no login` };
+    if (/login failed/i.test(txt)) return { ok: false, reason: 'credenciais recusadas pelo transmissor' };
+    return { ok: true };
+  } catch(e) {
+    return { ok: false, reason: e.name === 'AbortError' ? 'login demorou demais (timeout)' : (e.message || 'falha no login') };
+  }
+}
+
+async function fetchStn(stn) {
+  try {
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), 9000);
+    let res = await fetch(stn.url, { signal: ctrl.signal });
+    clearTimeout(tid);
+    if (!res.ok && stn.authUser) {
+      const login = await xtLogin(stn);
+      if (login.ok) {
+        const ctrl2 = new AbortController();
+        const tid2 = setTimeout(() => ctrl2.abort(), 9000);
+        res = await fetch(stn.url, { signal: ctrl2.signal });
+        clearTimeout(tid2);
+        if (!res.ok) throw new Error(`HTTP ${res.status} mesmo após login automático`);
+      } else {
+        throw new Error(`HTTP ${res.status} (login automático falhou: ${login.reason})`);
+      }
+    }
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const txt = await res.text();
+    live[stn.id] = { data: structData(txt), err: null, loading: false, ts: Date.now() };
+  } catch(e) {
+    const prev = live[stn.id];
+    live[stn.id] = { data: prev?.data||null, err: e.message||'Falha na conexão', loading: false, ts: prev?.ts||null };
+  }
+  renderAll();
+  document.getElementById('globalTs').textContent = 'Última atualização: ' + new Date().toLocaleTimeString('pt-BR');
+}
+
+function stopPoll(id) {
+  if(timers[id]){ clearInterval(timers[id]); delete timers[id]; }
+  if(streamTimers[id]){ clearInterval(streamTimers[id]); delete streamTimers[id]; }
+  stopBTConn(id);
+  const stn = cfg.groups.flatMap(g=>g.stations).find(s=>s.id===id);
+  if (stn) (stn.generators||[]).forEach(gen => stopGenPoll(gen.id));
+}
+
+function stopGenPoll(genId) {
+  if(genTimers[genId]){ clearInterval(genTimers[genId]); delete genTimers[genId]; }
+}
+
+function startPoll(stn) {
+  if (!stn.enabled) return;
+  stopPoll(stn.id);
+  if (stn.txType === 'bt') {
+    if (hasTelemetryUrl(stn)) startBTConn(stn);
+    if (stn.streamUrl) startStreamPoll(stn);
+    (stn.generators||[]).forEach(gen => startGenPoll(gen));
+    return;
+  }
+  const prev = live[stn.id];
+  live[stn.id] = { data: prev?.data||null, err: null, loading: true, ts: prev?.ts||null };
+  fetchStn(stn);
+  const ms = (stn.interval||cfg.interval||5)*1000;
+  timers[stn.id] = setInterval(() => fetchStn(stn), ms);
+  if (stn.streamUrl) startStreamPoll(stn);
+  (stn.generators||[]).forEach(gen => startGenPoll(gen));
+}
+
+function restartAll() {
+  cfg.groups.forEach(gr => {
+    gr.stations.forEach(s => { stopPoll(s.id); startPoll(s); });
+    (gr.generators||[]).forEach(gen => { stopGenPoll(gen.id); startGenPoll(gen); });
+  });
+}
+
+/* ── STREAM POLLING ── */
+function fmtDuration(secs) {
+  if (secs == null || isNaN(secs)) return '—';
+  secs = Math.floor(secs);
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  const s = secs % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+function detectStreamType(url) {
+  try { return new URL(url).pathname.endsWith('/stats') ? 'shoutcast' : 'icecast'; } catch { return 'icecast'; }
+}
+
+async function fetchStream(stn) {
+  const type = detectStreamType(stn.streamUrl);
+  try {
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), 9000);
+    const url = type === 'shoutcast'
+      ? stn.streamUrl
+      : stn.streamUrl.replace(/\/$/, '') + '/status-json.xsl';
+    const res = await fetch(url, { signal: ctrl.signal });
+    clearTimeout(tid);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    let online, sources;
+    if (type === 'shoutcast') {
+      const xml = new DOMParser().parseFromString(await res.text(), 'text/xml');
+      const get = tag => xml.querySelector(tag)?.textContent?.trim() || '';
+      online = get('STREAMSTATUS') === '1';
+      sources = online ? [{
+        listeners:     parseInt(get('CURRENTLISTENERS')) || 0,
+        listener_peak: parseInt(get('PEAKLISTENERS'))    || 0,
+        bitrate:       parseInt(get('BITRATE'))          || 0,
+        server_type:   get('CONTENT'),
+        'ice-samplerate': get('SAMPLERATE'),
+        listenurl:     stn.streamUrl,
+        _song:         get('SONGTITLE'),
+        _title:        get('SERVERTITLE'),
+      }] : [];
+    } else {
+      const src = (await res.json())?.icestats?.source;
+      sources = src ? (Array.isArray(src) ? src : [src]) : [];
+      online = sources.length > 0;
+    }
+    liveStream[stn.id] = { type, online, sources, err: null, loading: false, ts: Date.now() };
+  } catch(e) {
+    const prev = liveStream[stn.id];
+    liveStream[stn.id] = { type, online: false, sources: prev?.sources||[], err: e.message||'Falha', loading: false, ts: prev?.ts||null };
+  }
+  evaluateStreamAlerts(stn);
+  renderAll();
+}
+
+function getStationGroupName(stnId) {
+  for (const gr of cfg.groups) {
+    if ((gr.stations||[]).some(s => s.id === stnId)) return gr.name || null;
+  }
+  return null;
+}
+
+function evaluateStreamAlerts(stn) {
+  const st = liveStream[stn.id];
+  if (!st || st.loading) return;
+  if (!streamAlertSt[stn.id]) streamAlertSt[stn.id] = { prevOnline: null };
+  if (!genAlertSt[stn.id]) genAlertSt[stn.id] = { pending:{}, active:{}, fetchFailCount:0, prevData:null };
+  const prev = streamAlertSt[stn.id].prevOnline;
+  const curr = st.online;
+  if (prev === null) { streamAlertSt[stn.id].prevOnline = curr; return; }
+  const groupName = getStationGroupName(stn.id);
+  const stnLabel = groupName ? `${stn.name} (${groupName})` : stn.name;
+  if (prev === true && curr === false) {
+    genAlertSt[stn.id].active.streamDown = true;
+    const detail = st.err ? `Erro: ${st.err}` : 'Servidor de streaming não respondeu.';
+    addEvent(stn.id, stn.name, '🔴', 'high', 'streamDown', `${stnLabel}: STREAMING OFFLINE`, detail);
+  } else if (prev === false && curr === true) {
+    genAlertSt[stn.id].active.streamDown = false;
+    const src = st.sources?.[0];
+    const detail = src ? `${src.listeners ?? 0} ouvintes · ${src.bitrate ?? '?'} kbps` : '';
+    addEvent(stn.id, stn.name, '🟢', 'ok', 'streamDown', `${stnLabel}: Streaming restaurado`, detail);
+  }
+  streamAlertSt[stn.id].prevOnline = curr;
+  updateBell();
+  renderAlertBanner();
+}
+
+function startStreamPoll(stn) {
+  if (!stn.enabled || !stn.streamUrl) return;
+  if(streamTimers[stn.id]){ clearInterval(streamTimers[stn.id]); delete streamTimers[stn.id]; }
+  if (!liveStream[stn.id]) liveStream[stn.id] = { sources: [], err: null, loading: true, ts: null };
+  fetchStream(stn);
+  streamTimers[stn.id] = setInterval(() => fetchStream(stn), 30000);
+}
+
+const icoStream = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1" fill="currentColor"/></svg>`;
+const icoBolt   = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10"/></svg>`;
+
+function renderStreamSection(stn, ss) {
+  const loading = !ss || (ss.loading && !ss.sources?.length);
+  const online  = !loading && !!ss.online;
+
+  const badge = loading
+    ? `<span style="font-size:10px;opacity:.6">⟳ conectando...</span>`
+    : online
+      ? `<span class="pill on" style="font-size:9px;padding:2px 7px"><span class="pill-d"></span>Online</span>`
+      : `<span class="pill off" style="font-size:9px;padding:2px 7px"><span class="pill-d"></span>Offline</span>`;
+
+  const bar = `<div class="sec-bar sec-bar-stream">${icoStream}<span class="sec-bar-lbl">Streaming</span>${badge}</div>`;
+
+  if (loading) return `${bar}<div class="sec-body"><div class="str-offline">Conectando ao servidor...</div></div>`;
+  if (!online) {
+    const msg = ss.err ? 'Servidor inacessível' : 'Stream offline';
+    return `${bar}<div class="sec-body"><div class="str-offline">${msg}</div></div>`;
+  }
+
+  const mounts = (ss.sources||[]).map(src => {
+    const listeners  = src.listeners ?? src.Listeners ?? 0;
+    const peak       = src.listener_peak ?? src.ListenerPeak ?? 0;
+    const bitrate    = src.bitrate ?? src.Bitrate ?? 0;
+    const fmt        = src.server_type || '';
+    const channels   = src['ice-channels'] || '';
+    const samplerate = src['ice-samplerate'] || '';
+    const outKbps    = src.outgoing_kbitrate || 0;
+    const totalMb    = src.total_mbytes_sent || 0;
+    const uptime     = src.connected != null ? fmtDuration(src.connected) : null;
+    const listenurl  = src.listenurl || stn.streamUrl;
+    const mountName  = listenurl.split('/').pop() || 'stream';
+    const song       = src._song || '';
+    return `
+      <div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span class="str-mount">${esc(mountName)}</span>
+          <span class="str-label">${esc(fmt)}${channels ? ` · ${channels}ch · ${samplerate}Hz` : samplerate ? ` · ${samplerate}Hz` : ''}</span>
+        </div>
+        ${song ? `<div style="font-size:11px;color:var(--txt);opacity:.75;margin-bottom:6px">♪ ${esc(song)}</div>` : ''}
+        <div class="str-metrics">
+          <div><div class="lstn-big">${listeners}</div><div class="str-label">ouvintes</div></div>
+          <div><div class="lstn-big" style="font-size:20px;color:var(--muted)">${peak}</div><div class="str-label">pico</div></div>
+          <div><div class="lstn-big" style="font-size:20px">${bitrate}</div><div class="str-label">kbps</div></div>
+          ${outKbps ? `<div><div class="lstn-big" style="font-size:20px;color:var(--muted)">${outKbps}</div><div class="str-label">kbps out</div></div>` : ''}
+        </div>
+        <div class="str-footer">
+          ${uptime ? `<span>Encoder up: <strong>${uptime}</strong></span>` : ''}
+          ${totalMb ? `<span>Enviado: <strong>${parseFloat(totalMb).toFixed(0)} MB</strong></span>` : ''}
+          ${ss.ts ? `<span>${new Date(ss.ts).toLocaleTimeString('pt-BR')}</span>` : ''}
+        </div>
+      </div>`;
+  });
+  return `${bar}<div class="sec-body">${mounts.join('')||'<div class="str-offline">Nenhum mount ativo</div>'}</div>`;
+}
+
+/* ── GENERATOR (DSE855) ── */
+function parseGen855(json) {
+  const m  = json.MODBUS || {};                    // objeto com chaves string numéricas
+  const st = json.STATES || {};                    // STATES: {STATE_0, STATE_4, ...}
+  const ld = json.LEDS   || {};                    // LEDS:   {LED_9, LED_11, ...}
+  // O DSE855 usa uma FAMÍLIA de valores-sentinela pra "sem dado" perto do limite
+  // do int32 (2147483647 quando linkado mas sem essa leitura, 2147483643 quando o
+  // módulo perde a ligação com o controlador, etc.) — não só o valor exato.
+  // Nenhuma leitura real de gerador chega perto de 1 milhão, então qualquer coisa
+  // acima disso é tratada como "sem dado", evitando exibir esse número gigante.
+  const NA = v => v == null || v === -1 || Math.abs(v) > 1000000;
+  const get = (obj, k, scale) => { const v = obj[k]; return NA(v) ? null : (scale != null ? v * scale : v); };
+
+  const batt     = get(m,  5, 0.1);   // bateria V ÷10
+  const rpm      = get(m,  6);        // RPM do motor
+  const genFreq  = get(m,  7, 0.1);   // freq. gerador Hz ÷10
+  const genL1N   = get(m,  8, 0.1);   // saída L1-N V ÷10
+  const genL2N   = get(m,  9, 0.1);
+  const genL3N   = get(m, 10, 0.1);
+  const genL1L2  = get(m, 11, 0.1);   // saída L1-L2 V ÷10
+  const genL2L3  = get(m, 12, 0.1);
+  const genL3L1  = get(m, 13, 0.1);
+  const curL1    = get(m, 14);        // corrente L1 A
+  const curL2    = get(m, 15);
+  const curL3    = get(m, 16);
+  const gridFreq = get(m, 22, 0.1);   // freq. rede Hz ÷10
+  const gridL1N  = get(m, 23, 0.1);   // rede L1-N V ÷10
+  const gridL2N  = get(m, 24, 0.1);
+  const gridL3N  = get(m, 25, 0.1);
+  const gridL1L2 = get(m, 26, 0.1);   // rede L1-L2 V ÷10
+  const gridL2L3 = get(m, 27, 0.1);
+  const gridL3L1 = get(m, 28, 0.1);
+  const fuel     = get(m,   3);       // combustível % (registro a confirmar)
+  const oilPress = get(m, 0);         // pressão óleo (confirmado ao vivo: registro 0 = 20 kPa na tela)
+  const engineTemp = get(m, 1);       // temperatura do motor °C
+  const runSec   = get(m, 305);        // tempo total de funcionamento em segundos
+  const starts   = get(m, 310);       // contador de partidas
+
+  // STATES: {STATE_0, STATE_4, ...}  /  LEDS: {LED_9, LED_11, ...}
+  const stateOp = Number(st['STATE_0'] ?? 0);  // 7 = em operação
+  const mode    = Number(st['STATE_4']);         // 1 = AUTO, 2 = MANUAL
+  const running = stateOp === 7 || (rpm != null && rpm > 0);
+  const modeStr = mode === 1 ? 'AUTO' : mode === 2 ? 'MANUAL'
+                : Number(ld['LED_11']) === 1 ? 'AUTO' : Number(ld['LED_9']) === 1 ? 'MANUAL' : null;
+
+  const alarmLevel = json.MODULE?.ALARMLEVEL ?? 0;
+  const alarms     = json.ALARMS || [];
+  // Legenda oficial DSE GenComm (doc. SP-228, código de status de 4 bits):
+  //   1 = nenhum alarme presente · 2 = alarme de aviso · 3 = alarme de desligamento
+  //   15 = alarme não implementado nesse controlador (aparece como 0xF por posição,
+  //   ex: 0xFFFF/65535 quando todas as posições estão "não implementado" — isso é
+  //   normal, não uma falha, mesmo que a tela do DSE855 rotule errado como "Shutdown").
+  // Só 2 e 3 são condições reais; qualquer outro valor (1, 15, ou combinações
+  // empacotadas maiores) não representa um alarme ativo de verdade.
+  const alarmLevelValid = alarmLevel === 2 || alarmLevel === 3;
+  const fault      = alarmLevelValid || alarms.length > 0;
+  const serial     = json.INFO?.SERIAL || '';
+
+  const link = json.MODULE?.LINK === 1;
+  return { running, fault, link, alarmLevel, alarms, modeStr, serial,
+           batt, rpm, genFreq, fuel, oilPress, engineTemp, runSec,
+           genL1N, genL2N, genL3N, genL1L2, genL2L3, genL3L1,
+           curL1, curL2, curL3,
+           gridFreq, gridL1N, gridL2N, gridL3N, gridL1L2, gridL2L3, gridL3L1,
+           starts };
+}
+
+// ── Gerador só por Modbus (sem módulo/API JSON) ──
+// Lê as páginas 3 (status), 4 (instrumentação básica) e 7 (acumulada) da
+// GenComm direto via TCP, sem depender de nenhuma URL HTTP. Endereços,
+// escalas e ordem big-endian dos pares de 32 bits conferidos ao vivo contra
+// um DSE855/6120 MKIII (bateram exatamente com pressão de óleo, bateria,
+// RPM, horas de funcionamento e partidas já mostrados pelo JSON). Monta um
+// objeto `data` no mesmo formato de parseGen855(), pra reaproveitar toda a
+// UI/alertas existentes sem duplicar lógica.
+function u16(v) { return (v == null || v >= 0xFFF8) ? null : v; }
+function s16(v) { if (v == null) return null; const s = v > 0x7FFF ? v - 0x10000 : v; return (v >= 0x7FF8 && v <= 0x7FFF) ? null : s; }
+function u32(hi, lo) { if (hi == null || lo == null) return null; const v = hi * 65536 + lo; return v >= 0xFFFFFFF8 ? null : v; }
+function scale(v, f) { return v == null ? null : v * f; }
+
+function parseGenModbus(p3, p4, p7, alarmResult) {
+  const oilPress   = u16(p4[0]);
+  const engineTemp = s16(p4[1]);
+  const fuel       = u16(p4[3]);
+  const batt       = scale(u16(p4[5]), 0.1);
+  const rpm        = u16(p4[6]);
+  const genFreq    = scale(u16(p4[7]), 0.1);
+  const genL1N     = scale(u32(p4[8], p4[9]), 0.1);
+  const genL2N     = scale(u32(p4[10], p4[11]), 0.1);
+  const genL3N     = scale(u32(p4[12], p4[13]), 0.1);
+  const genL1L2    = scale(u32(p4[14], p4[15]), 0.1);
+  const genL2L3    = scale(u32(p4[16], p4[17]), 0.1);
+  const genL3L1    = scale(u32(p4[18], p4[19]), 0.1);
+  const curL1      = scale(u32(p4[20], p4[21]), 0.1);
+  const curL2      = scale(u32(p4[22], p4[23]), 0.1);
+  const curL3      = scale(u32(p4[24], p4[25]), 0.1);
+  const gridFreq   = scale(u16(p4[35]), 0.1);
+  const gridL1N    = scale(u32(p4[36], p4[37]), 0.1);
+  const gridL2N    = scale(u32(p4[38], p4[39]), 0.1);
+  const gridL3N    = scale(u32(p4[40], p4[41]), 0.1);
+  const gridL1L2   = scale(u32(p4[42], p4[43]), 0.1);
+  const gridL2L3   = scale(u32(p4[44], p4[45]), 0.1);
+  const gridL3L1   = scale(u32(p4[46], p4[47]), 0.1);
+
+  const serial   = u32(p3[2], p3[3]);
+  const ctrlMode = p3[4];
+  const modeStr  = ctrlMode === 1 ? 'AUTO' : ctrlMode === 2 ? 'MANUAL'
+                 : ctrlMode === 0 ? 'STOP' : ctrlMode === 6 ? 'TEST' : null;
+
+  const runSec = u32(p7[0], p7[1]);
+  const starts = u32(p7[10], p7[11]);
+
+  const decoded = alarmResult?.success ? decodeAlarmPage(alarmResult.registers) : { warn:0, shutdown:0, trip:0, active:[] };
+  const alarms = decoded.active.map(a => a.name);
+  const alarmLevel = (decoded.shutdown > 0 || decoded.trip > 0) ? 3 : decoded.warn > 0 ? 2 : 1;
+  const fault = decoded.warn > 0 || decoded.shutdown > 0 || decoded.trip > 0;
+  const running = rpm != null && rpm > 0;
+
+  return { running, fault, link: undefined, alarmLevel, alarms, modeStr, serial: serial != null ? String(serial) : null,
+           batt, rpm, genFreq, fuel, oilPress, engineTemp, runSec,
+           genL1N, genL2N, genL3N, genL1L2, genL2L3, genL3L1,
+           curL1, curL2, curL3,
+           gridFreq, gridL1N, gridL2N, gridL3N, gridL1L2, gridL2L3, gridL3L1,
+           starts };
+}
+
+async function fetchGenModbus(gen) {
+  const host = gen.modbusHost;
+  const port = Number(gen.modbusPort) || 502;
+  try {
+    if (!window.modbusAPI) throw new Error('Modbus indisponível neste app');
+    const res = await window.modbusAPI.readGenerator(host, port);
+    if (!res.success) throw new Error(res.error || 'Falha na leitura Modbus');
+    liveGen[gen.id] = { data: parseGenModbus(res.p3, res.p4, res.p7, res.alarm), err: null, loading: false, ts: Date.now() };
+  } catch(e) {
+    const prev = liveGen[gen.id];
+    liveGen[gen.id] = { data: prev?.data||null, err: e.message||'Falha', loading: false, ts: prev?.ts||null };
+  }
+  evaluateGenAlerts(gen, liveGen[gen.id]);
+  renderAll();
+}
+
+async function fetchGen(gen) {
+  try {
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), 9000);
+    const res = await fetch(gen.url, { signal: ctrl.signal });
+    clearTimeout(tid);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    liveGen[gen.id] = { data: parseGen855(json), err: null, loading: false, ts: Date.now() };
+  } catch(e) {
+    const prev = liveGen[gen.id];
+    liveGen[gen.id] = { data: prev?.data||null, err: e.message||'Falha', loading: false, ts: prev?.ts||null };
+  }
+  evaluateGenAlerts(gen, liveGen[gen.id]);
+  renderAll();
+  pollGenModbus(gen);
+}
+
+// ── Alarmes específicos via Modbus TCP (Página 8 do GenComm) ──
+// Roda em paralelo ao polling JSON acima. Existe porque a telemetria JSON
+// (realtime.cgi) nem sempre reporta todo alarme real: um caso confirmado ao
+// vivo mostrou ALARMLEVEL=1024 e ALARMS=[] no JSON enquanto a tela do próprio
+// DSE tinha um aviso ativo ("Battery Over Volts") — só a leitura Modbus da
+// página 8 detectou esse alarme (registrador 2055, nibble alto = 2). Por
+// isso o resultado do Modbus não é só decorativo: alimenta genModbusFault()
+// (usado nos status/badges/contadores) e pode disparar seu próprio evento
+// quando o JSON não capturou nada.
+let liveGenModbus = {};
+
+function hostFromUrl(url) {
+  try { return new URL(url).hostname || null; } catch(e) { return null; }
+}
+
+// Nomes oficiais dos canais de alarme (GenComm SP-228, Página 8, seção 8.10)
+// — tabela FIXA do protocolo, igual pra qualquer controlador que use esse
+// sistema de alarme "antigo" (não é string dinâmica lida do dispositivo, é
+// padrão do GenComm). Índice 0 = canal 1, índice 1 = canal 2, etc.
+// Confirmado ao vivo: canal 26 ("High battery voltage") bateu exatamente com
+// o "Battery Over Volts" mostrado na tela do próprio DSE.
+const GENCOMM_ALARM_NAMES = [
+  'Emergency stop','Low oil pressure','High coolant temperature','High oil temperature',
+  'Under speed','Over speed','Fail to start','Fail to come to rest',
+  'Loss of speed sensing','Generator low voltage','Generator high voltage','Generator low frequency',
+  'Generator high frequency','Generator high current','Generator earth fault','Generator reverse power',
+  'Air flap','Oil pressure sender fault','Coolant temperature sender fault','Oil temperature sender fault',
+  'Fuel level sender fault','Magnetic pickup fault','Loss of AC speed signal','Charge alternator failure',
+  'Low battery voltage','High battery voltage','Low fuel level','High fuel level',
+  'Generator failed to close','Mains failed to close','Generator failed to open','Mains failed to open',
+  'Mains low voltage','Mains high voltage','Bus failed to close','Bus failed to open',
+  'Mains low frequency','Mains high frequency','Mains failed','Mains phase rotation wrong',
+  'Generator phase rotation wrong','Maintenance due','Clock not set','Local LCD configuration lost',
+  'Local telemetry configuration lost','Control unit not calibrated','Modem power fault','Generator short circuit',
+  'Failure to synchronise','Bus live','Scheduled run','Bus phase rotation wrong',
+  'Priority selection error','Multiset comms (MSC) data error','Multiset comms (MSC) ID error','Multiset comms (MSC) failure',
+  'Multiset comms (MSC) too few sets','Multiset comms (MSC) alarms inhibited','Multiset comms (MSC) old version units','Mains reverse power',
+  'Minimum sets not reached','Insufficient capacity available','Expansion input unit not calibrated','Expansion input unit failure',
+  'Auxiliary sender 1 low','Auxiliary sender 1 high','Auxiliary sender 1 fault','Auxiliary sender 2 low',
+  'Auxiliary sender 2 high','Auxiliary sender 2 fault','Auxiliary sender 3 low','Auxiliary sender 3 high',
+  'Auxiliary sender 3 fault','Auxiliary sender 4 low','Auxiliary sender 4 high','Auxiliary sender 4 fault',
+  'Engine control unit (ECU) link lost','Engine control unit (ECU) failure','Engine control unit (ECU) error','Low coolant temperature',
+  'Out of sync','Low Oil Pressure Switch','Alternative Auxiliary Mains Fail','Loss of excitation',
+  'Mains kW Limit','Negative phase sequence','Mains ROCOF','Mains vector shift',
+  'Mains G59 low frequency','Mains G59 high frequency','Mains G59 low voltage','Mains G59 high voltage',
+  'Mains G59 trip','Generator kW Overload','Engine Inlet Temperature high','Bus 1 live',
+  'Bus 1 phase rotation wrong','Bus 2 live','Bus 2 phase rotation wrong', null,
+];
+
+// Cada registrador de 16 bits contém 4 canais de alarme, um por nibble, do
+// mais significativo (canal N) ao menos significativo (canal N+3) — o
+// registrador de deslocamento 0 é só um contador (não é alarme). Legenda
+// oficial: 1=sem alarme, 2=aviso, 3=desligamento, 4=disparo elétrico,
+// 15=não implementado neste controlador.
+function decodeAlarmPage(registers) {
+  const active = [];
+  let warn = 0, shutdown = 0, trip = 0;
+  for (const key of Object.keys(registers)) {
+    const offset = Number(key) - 2048;
+    if (offset < 1) continue;
+    const v = registers[key];
+    for (let n = 0; n < 4; n++) {
+      const code = (v >> (12 - n * 4)) & 0xF;
+      if (code !== 2 && code !== 3 && code !== 4) continue;
+      const channel = (offset - 1) * 4 + n + 1;
+      const name = GENCOMM_ALARM_NAMES[channel - 1] || ('Canal ' + channel);
+      active.push({ channel, name, code });
+      if (code === 2) warn++; else if (code === 3) shutdown++; else if (code === 4) trip++;
+    }
+  }
+  return { warn, shutdown, trip, active };
+}
+
+function genModbusFault(genId) {
+  const mb = liveGenModbus[genId];
+  return !!(mb && mb.ok && (mb.warn > 0 || mb.shutdown > 0 || mb.trip > 0));
+}
+
+async function pollGenModbus(gen) {
+  if (!window.modbusAPI) return;
+  const host = hostFromUrl(gen.url);
+  if (!host) return;
+  const port = Number(gen.modbusPort) || 502;
+  try {
+    const res = await window.modbusAPI.readAlarmPage(host, port);
+    if (res.success) {
+      const { warn, shutdown, trip, active } = decodeAlarmPage(res.registers);
+      liveGenModbus[gen.id] = { ok: true, warn, shutdown, trip, active, ts: Date.now() };
+    } else {
+      liveGenModbus[gen.id] = { ...(liveGenModbus[gen.id]||{}), ok: false, err: res.error, ts: Date.now() };
+    }
+  } catch(e) {
+    liveGenModbus[gen.id] = { ...(liveGenModbus[gen.id]||{}), ok: false, err: e.message||'Falha', ts: Date.now() };
+  }
+  evaluateGenModbusAlerts(gen);
+  renderAll();
+}
+
+// Dispara um evento próprio só quando o Modbus vê um alarme que o telemetry
+// JSON não viu (evita duplicar aviso quando os dois concordam — nesse caso o
+// controllerAlarm do JSON já cobre e a contagem Modbus só complementa a
+// mensagem dele, ver evaluateGenAlerts).
+function evaluateGenModbusAlerts(gen) {
+  const gId = gen.id;
+  const gName = gen.name || 'Gerador';
+  const mb = liveGenModbus[gId];
+  if (!mb || !mb.ok) return;
+  initGenAlertSt(gId);
+  const st = genAlertSt[gId];
+  const parentName = getGenParentName(gId);
+  const genLabel = parentName ? `${gName} (${parentName})` : gName;
+  const hasModbusAlarm = mb.warn > 0 || mb.shutdown > 0 || mb.trip > 0;
+
+  if (hasModbusAlarm && !st.active.controllerAlarm) {
+    if (!st.active.modbusAlarm) {
+      st.active.modbusAlarm = true;
+      const isCritical = mb.shutdown > 0 || mb.trip > 0;
+      const names = mb.active.map(a => a.name).join(', ');
+      addEvent(gId, gName, isCritical ? '🚨' : '⚠️', isCritical ? 'crit' : 'high', 'modbusAlarm',
+        `${genLabel}: ${names}`,
+        `Detectado via Modbus (não reportado pela telemetria JSON).`);
+    }
+  } else if (st.active.modbusAlarm && (!hasModbusAlarm || st.active.controllerAlarm)) {
+    st.active.modbusAlarm = false;
+    if (!hasModbusAlarm) addEvent(gId, gName, '🟢', 'ok', 'modbusAlarm', `${genLabel}: Alarme Modbus limpo`);
+  }
+}
+
+function startGenPoll(gen) {
+  const modbusOnly = !gen.url && gen.modbusHost;
+  if (!gen.url && !modbusOnly) return;
+  if(genTimers[gen.id]){ clearInterval(genTimers[gen.id]); delete genTimers[gen.id]; }
+  if (!liveGen[gen.id]) liveGen[gen.id] = { data: null, err: null, loading: true, ts: null };
+  const poll = modbusOnly ? () => fetchGenModbus(gen) : () => fetchGen(gen);
+  poll();
+  genTimers[gen.id] = setInterval(poll, 10000);
+}
+
+function renderGenSection(gen, gs, opts = {}) {
+  const loading = !gs || (gs.loading && !gs.data);
+  const d = gs?.data;
+  // sem toggle manual ainda → segue o padrão do modo do grupo (compacto = já vem recolhido)
+  const collapsed = genCollapsed[gen.id] !== undefined ? genCollapsed[gen.id] : !!opts.compact;
+
+  const modeBadge = d?.modeStr
+    ? `<span class="pill ${d.modeStr==='AUTO'?'on':'wn'}" style="font-size:9px;padding:2px 8px;font-weight:800;letter-spacing:.05em">${d.modeStr}</span>` : '';
+
+  let badge;
+  if (loading) {
+    badge = `<span style="font-size:10px;opacity:.6">⟳ conectando...</span>`;
+  } else if (!d) {
+    badge = `<span class="pill off" style="font-size:9px;padding:2px 7px"><span class="pill-d"></span>Sem dados</span>`;
+  } else if (d.link === false) {
+    badge = `<span class="pill off" style="font-size:9px;padding:2px 7px"><span class="pill-d"></span>Sem ligação</span>`;
+  } else if (d.fault || genModbusFault(gen.id)) {
+    badge = `<span class="pill wn" style="font-size:9px;padding:2px 7px"><span class="pill-d"></span>ALARME</span>`;
+  } else if (d.running) {
+    badge = `<span class="pill on" style="font-size:9px;padding:2px 7px"><span class="pill-d"></span>Em operação</span>`;
+  } else {
+    badge = `<span class="pill n" style="font-size:9px;padding:2px 7px"><span class="pill-d"></span>Parado</span>`;
+  }
+
+  const genChevSvg = '<svg id="genchev-' + gen.id + '" class="grp-chev' + (collapsed ? '' : ' open') + '" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>';
+  const bar = '<div class="sec-bar sec-bar-gen" style="cursor:pointer;user-select:none">' + icoBolt + '<span class="sec-bar-lbl">' + esc(gen.name||'Gerador') + '</span>' + modeBadge + badge + genChevSvg + '</div>';
+  const genBodyHide = collapsed ? ' style="display:none"' : '';
+
+  const viaModbus = !gen.url && gen.modbusHost;
+  if (loading) return bar + '<div id="genbody-' + gen.id + '"' + genBodyHide + ' class="sec-body"><div class="str-offline">' + (viaModbus ? 'Conectando via Modbus...' : 'Conectando ao DSE855...') + '</div></div>';
+  if (gs.err && !d) return bar + '<div id="genbody-' + gen.id + '"' + genBodyHide + ' class="sec-body"><div class="str-offline">' + (viaModbus ? 'Gerador inacessível via Modbus: ' + esc(gs.err) : 'DSE855 inacessível') + '</div></div>';
+  if (!d) return bar + '<div id="genbody-' + gen.id + '"' + genBodyHide + ' class="sec-body"><div class="str-offline">Sem dados</div></div>';
+  if (d.link === false) return bar + '<div id="genbody-' + gen.id + '"' + genBodyHide + ' class="sec-body"><div class="str-offline">Módulo DSE855 acessível, mas sem ligação com a placa do gerador — dados indisponíveis.</div></div>';
+
+  const nv = (v, dec=1) => v != null ? parseFloat(v).toFixed(dec) : '—';
+  const vCls = v => { if (v==null) return 'n'; const dv=Math.abs(v-220)/220*100; return dv>15?'cr':dv>8?'wn':'ok'; };
+  const battCls = v => v==null?'n':v<11.5?'cr':v<12.5?'wn':'ok';
+  const fuelCls = v => v==null?'n':v<15?'cr':v<30?'wn':'ok';
+
+  // ── Métricas rápidas (sempre visíveis)
+  const quickStats = [
+    d.rpm      != null ? `<div class="mm"><span class="mm-lbl">Rotação</span><span class="mm-val">${d.rpm} RPM</span></div>` : '',
+    d.genFreq  != null ? `<div class="mm"><span class="mm-lbl">Freq. Ger.</span><span class="mm-val">${nv(d.genFreq)} Hz</span></div>` : '',
+    d.batt     != null ? `<div class="mm"><span class="mm-lbl">Bateria</span><span class="mm-val ${battCls(d.batt)}">${nv(d.batt)} V</span></div>` : '',
+    d.oilPress != null ? `<div class="mm"><span class="mm-lbl">Óleo</span><span class="mm-val">${d.oilPress} kPa</span></div>` : '',
+    d.engineTemp != null ? `<div class="mm"><span class="mm-lbl">Temp. Motor</span><span class="mm-val">${d.engineTemp}°C</span></div>` : '',
+  ].filter(Boolean).join('');
+
+  // ── Barra de combustível
+  const fuelBar = d.fuel != null ? `
+    <div style="margin-top:8px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+        <span class="mm-lbl">Combustível</span><span class="mm-val ${fuelCls(d.fuel)}">${d.fuel}%</span>
+      </div>
+      <div class="bar-wrap"><div class="bar-fill ${fuelCls(d.fuel)}" style="width:${Math.min(d.fuel,100)}%"></div></div>
+    </div>` : '';
+
+  // ── Saída do gerador (sempre — zeros quando parado são informativos)
+  const genVoltLN = d.genL1N != null ? `
+    <div style="margin-top:8px">
+      <div class="sec-lbl" style="margin-bottom:4px">Saída do Gerador — Fase/Neutro</div>
+      <div class="phase-row">
+        <span class="ph ${vCls(d.genL1N)}">L1 ${nv(d.genL1N)}V</span>
+        <span class="ph ${vCls(d.genL2N)}">L2 ${nv(d.genL2N)}V</span>
+        <span class="ph ${vCls(d.genL3N)}">L3 ${nv(d.genL3N)}V</span>
+      </div>
+    </div>` : '';
+
+  const genVoltLL = d.running && d.genL1L2 != null ? `
+    <div style="margin-top:4px">
+      <div class="sec-lbl" style="margin-bottom:4px">Saída do Gerador — Fase/Fase</div>
+      <div class="phase-row">
+        <span class="ph ok">L1-L2 ${nv(d.genL1L2)}V</span>
+        <span class="ph ok">L2-L3 ${nv(d.genL2L3)}V</span>
+        <span class="ph ok">L3-L1 ${nv(d.genL3L1)}V</span>
+      </div>
+    </div>` : '';
+
+  // ── Correntes (só quando não-zero)
+  const hasCur = (d.curL1 ?? 0) > 0 || (d.curL2 ?? 0) > 0 || (d.curL3 ?? 0) > 0;
+  const curRow = hasCur ? `
+    <div style="margin-top:4px">
+      <div class="sec-lbl" style="margin-bottom:4px">Corrente — por Fase</div>
+      <div class="phase-row">
+        <span class="ph ok">L1 ${nv(d.curL1,0)} A</span>
+        <span class="ph ok">L2 ${nv(d.curL2,0)} A</span>
+        <span class="ph ok">L3 ${nv(d.curL3,0)} A</span>
+      </div>
+    </div>` : '';
+
+  // ── Rede elétrica (sempre)
+  const gridVoltLN = d.gridL1N != null ? `
+    <div style="margin-top:8px">
+      <div class="sec-lbl" style="margin-bottom:4px">Rede Elétrica${d.gridFreq != null ? ` — ${nv(d.gridFreq)} Hz` : ''}</div>
+      <div class="phase-row">
+        <span class="ph ${vCls(d.gridL1N)}">L1 ${nv(d.gridL1N)}V</span>
+        <span class="ph ${vCls(d.gridL2N)}">L2 ${nv(d.gridL2N)}V</span>
+        <span class="ph ${vCls(d.gridL3N)}">L3 ${nv(d.gridL3N)}V</span>
+      </div>
+    </div>` : '';
+
+  const gridVoltLL = d.gridL1L2 != null ? `
+    <div style="margin-top:4px">
+      <div class="phase-row">
+        <span class="ph ok">L1-L2 ${nv(d.gridL1L2)}V</span>
+        <span class="ph ok">L2-L3 ${nv(d.gridL2L3)}V</span>
+        <span class="ph ok">L3-L1 ${nv(d.gridL3L1)}V</span>
+      </div>
+    </div>` : '';
+
+  // ── Alarmes
+  const alarmsHtml = d.alarms.length ? `
+    <div style="margin-top:8px">
+      <div class="sec-lbl" style="margin-bottom:3px;color:var(--warn)">Alarmes Ativos</div>
+      ${d.alarms.map(a => `<div style="font-size:11px;color:var(--crit)">⚠ ${esc(typeof a==='string'?a:JSON.stringify(a))}</div>`).join('')}
+    </div>` : '';
+
+  const fmtRun = s => { const h=Math.floor(s/3600),m=Math.floor((s%3600)/60); return h>0?`${h}h ${String(m).padStart(2,'0')}min`:`${m}min`; };
+  const footer = `<div class="str-footer" style="margin-top:8px">
+    ${d.runSec != null ? `<span>Funcionamento: <strong>${fmtRun(d.runSec)}</strong></span>` : ''}
+    ${d.starts != null ? `<span>Partidas: <strong>${d.starts}</strong></span>` : ''}
+    ${d.serial ? `<span style="opacity:.55">${esc(d.serial)}</span>` : ''}
+    ${gs.ts ? `<span>${new Date(gs.ts).toLocaleTimeString('pt-BR')}</span>` : ''}
+    ${gs.err ? `<span style="color:var(--warn)">⚠ ${esc(gs.err)}</span>` : ''}
+  </div>`;
+
+  // ── Controle remoto (só quando há host Modbus disponível) — envia comandos
+  // reais pro controlador (Página 16 do GenComm), por isso exige confirmação
+  // antes de cada clique (ver sendGenControlCmd).
+  const controlHost = genControlHost(gen);
+  const controlRow = controlHost ? `
+    <div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--bd)">
+      <div class="sec-lbl" style="margin-bottom:5px">Controle Remoto</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap" onclick="event.stopPropagation()">
+        <button class="btn" style="font-size:11px;color:var(--good)" onclick="sendGenControlCmd('${gen.id}','start')">▶ Ligar</button>
+        <button class="btn" style="font-size:11px;color:var(--crit)" onclick="sendGenControlCmd('${gen.id}','stop')">■ Desligar</button>
+        <button class="btn" style="font-size:11px" onclick="sendGenControlCmd('${gen.id}','auto')">Modo Auto</button>
+        <button class="btn" style="font-size:11px" onclick="sendGenControlCmd('${gen.id}','manual')">Modo Manual</button>
+      </div>
+    </div>` : '';
+
+  return bar + '<div id="genbody-' + gen.id + '"' + genBodyHide + ' class="sec-body">'
+    + (quickStats ? '<div class="ref-row" style="flex-wrap:wrap;gap:8px 20px">' + quickStats + '</div>' : '')
+    + fuelBar + genVoltLN + genVoltLL + curRow + gridVoltLN + gridVoltLL + alarmsHtml + footer + controlRow
+    + '</div>';
+}
+
+const trashIcon = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>`;
+
+function genRowHtml(gen) {
+  return `<div class="gen-row" id="genrow-${gen.id}" style="flex-direction:column;align-items:stretch;gap:6px">
+    <div style="display:flex;gap:8px;align-items:center">
+      <input type="text" class="inp" placeholder="Nome do gerador" value="${esc(gen.name||'')}" onchange="updGenerator('${gen.id}','name',this.value)" style="flex:1;min-width:120px">
+      <input type="url" class="inp" placeholder="http://IP:8091/realtime.cgi?SID=... (opcional)" value="${esc(gen.url||'')}" onchange="updGenerator('${gen.id}','url',this.value)" style="flex:2;min-width:200px">
+      <button class="btn btn-ico btn-d" onclick="removeGen('${gen.id}')" title="Remover gerador">${trashIcon}</button>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <input type="text" class="inp" placeholder="IP do gerador — só se não tiver URL JSON acima" title="Host Modbus: usado só quando não há URL JSON. Lê tudo (RPM, tensões, alarmes etc.) direto pela porta Modbus." value="${esc(gen.modbusHost||'')}" onchange="updGenerator('${gen.id}','modbusHost',this.value)" style="flex:2;min-width:160px">
+      <input type="number" class="inp" placeholder="502" title="Porta Modbus TCP (padrão 502)" value="${gen.modbusPort||''}" onchange="updGenerator('${gen.id}','modbusPort',this.value?+this.value:null)" style="flex:0 0 72px;min-width:72px">
+      <span style="font-size:10px;color:var(--muted);flex:1">${gen.url ? 'Modbus complementa os alertas' : (gen.modbusHost ? 'Modo Modbus puro (sem URL JSON)' : 'Preencha a URL ou o host Modbus acima')}</span>
+    </div>
+  </div>`;
+}
+
+/* ── CONFIG UI ── */
+function stnRowHtml(s, gId) {
+  const stnGens = (s.generators||[]).map(gen => genRowHtml(gen)).join('');
+  return `<div class="stn-row" id="row-${s.id}">
+    <div class="stn-row-main">
+      <div><div class="lbl">Nome</div><input type="text" class="inp" value="${esc(s.name)}" onchange="updStn('${s.id}','name',this.value)"></div>
+      <div><div class="lbl">Tipo</div><select class="inp" onchange="updStn('${s.id}','txType',this.value)"><option value="standard" ${(s.txType||'standard')==='standard'?'selected':''}>Padrão</option><option value="bt" ${s.txType==='bt'?'selected':''}>BT APP10</option></select></div>
+      <div><div class="lbl">URL da Telemetria</div><input type="url" class="inp" value="${esc(s.url)}" onchange="updStn('${s.id}','url',this.value)"></div>
+      <div><div class="lbl">Intervalo (s)</div><input type="number" class="inp" value="${s.interval||cfg.interval}" min="2" max="120" onchange="updStn('${s.id}','interval',+this.value)" ${s.txType==='bt'?'disabled title="BT usa WebSocket contínuo"':''}></div>
+      <div style="padding-top:16px;display:flex;align-items:center;gap:6px">
+        <button class="tgl ${s.enabled?'on':''}" onclick="tglStn('${s.id}')"></button>
+        <span style="font-size:11px;color:var(--muted)">${s.enabled?'Ativo':'Pausado'}</span>
+      </div>
+      <button class="btn btn-ico" onclick="testStn('${s.id}')" title="Testar" style="margin-top:14px">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+      </button>
+      <button class="btn btn-ico btn-d" onclick="removeStn('${s.id}')" title="Remover" style="margin-top:14px">${trashIcon}</button>
+    </div>
+    <div class="stn-row-stream">
+      <div class="lbl">URL Streaming (opcional)</div>
+      <input type="url" class="inp" placeholder="https://painel.sintonizar.tv.br:10106" value="${esc(s.streamUrl||'')}" onchange="updStn('${s.id}','streamUrl',this.value)">
+    </div>
+    <div class="stn-row-stream">
+      <div class="lbl">Login do transmissor (opcional — só se ele pedir usuário/senha)</div>
+      <div style="display:flex;gap:8px">
+        <input type="text" class="inp" placeholder="Usuário" autocomplete="off" value="${esc(s.authUser||'')}" onchange="updStn('${s.id}','authUser',this.value)" style="flex:1">
+        <input type="password" class="inp" placeholder="Senha" autocomplete="off" value="${esc(s.authPass||'')}" onchange="updStn('${s.id}','authPass',this.value)" style="flex:1">
+      </div>
+    </div>
+    <div class="stn-row-gens">
+      <div class="lbl" style="margin-bottom:6px">Geradores exclusivos desta rádio</div>
+      ${stnGens || '<div style="font-size:11px;color:var(--muted);margin-bottom:4px">Nenhum gerador exclusivo.</div>'}
+      <button class="btn" style="margin-top:4px;font-size:11px" onclick="addStnGen('${s.id}')">+ Gerador</button>
+    </div>
+  </div>`;
+}
+
+let cfgGrpCollapsed = {};
+
+function toggleCfgGrp(gId) {
+  cfgGrpCollapsed[gId] = !cfgGrpCollapsed[gId];
+  const body = document.getElementById('cfggrpbody-' + gId);
+  const chev = document.getElementById('cfggrpchev-' + gId);
+  if (body) body.style.display = cfgGrpCollapsed[gId] ? 'none' : '';
+  if (chev) chev.classList.toggle('open', !cfgGrpCollapsed[gId]);
+}
+
+function renderStnList() {
+  const el = document.getElementById('stnList');
+  if (!el) return;
+  document.getElementById('gInterval').value = cfg.interval;
+  el.innerHTML = cfg.groups.map(gr => {
+    const grpGens = (gr.generators||[]).map(gen => genRowHtml(gen)).join('');
+    const collapsed = !!cfgGrpCollapsed[gr.id];
+    const stnCount = gr.stations.length;
+    return `<div class="grp-cfg" id="grpcfg-${gr.id}">
+      <div class="grp-cfg-hd" onclick="toggleCfgGrp('${gr.id}')" style="cursor:pointer;user-select:none">
+        <div style="display:flex;align-items:center;gap:8px;flex:1">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:.4;flex-shrink:0"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          <input type="text" class="inp" value="${esc(gr.name)}" onchange="updGroup('${gr.id}','name',this.value)" onclick="event.stopPropagation()" style="flex:1">
+          <span class="grp-count">${stnCount} rádio${stnCount!==1?'s':''}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <svg id="cfggrpchev-${gr.id}" class="grp-chev ${collapsed?'':'open'}" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+          <button class="btn btn-ico btn-d" onclick="event.stopPropagation();removeGroup('${gr.id}')" title="Remover grupo">${trashIcon}</button>
+        </div>
+      </div>
+      <div id="cfggrpbody-${gr.id}" style="display:${collapsed?'none':''}">
+        <div class="grp-cfg-gens">
+          <div class="lbl" style="margin-bottom:6px">Geradores do grupo (compartilhados pelas rádios)</div>
+          ${grpGens || '<div style="font-size:11px;color:var(--muted);margin-bottom:4px">Nenhum gerador compartilhado.</div>'}
+          <button class="btn" style="margin-top:4px;font-size:11px" onclick="addGrpGen('${gr.id}')">+ Gerador</button>
+        </div>
+        <div class="grp-cfg-stns">${gr.stations.map(s => stnRowHtml(s, gr.id)).join('') || '<div style="font-size:12px;color:var(--muted);padding:4px 0">Nenhuma rádio neste grupo.</div>'}</div>
+        <div class="grp-cfg-foot"><button class="btn btn-p" onclick="addStation('${gr.id}')">+ Rádio</button></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function addGroup() {
+  cfg.groups.push({ id:uid(), name:`Grupo ${cfg.groups.length+1}`, generators:[], stations:[] });
+  renderStnList();
+}
+
+function addGrpGen(gId) {
+  const gr = cfg.groups.find(g=>g.id===gId); if(!gr) return;
+  gr.generators = gr.generators||[];
+  gr.generators.push({ id:uid(), name:`Gerador ${gr.generators.length+1}`, url:'' });
+  renderStnList();
+}
+
+function addStnGen(sId) {
+  let s; for (const gr of cfg.groups) { s=gr.stations.find(s=>s.id===sId); if(s) break; }
+  if(!s) return;
+  s.generators = s.generators||[];
+  s.generators.push({ id:uid(), name:`Gerador ${s.generators.length+1}`, url:'' });
+  renderStnList();
+}
+
+function removeGen(genId) {
+  for (const gr of cfg.groups) {
+    const i = (gr.generators||[]).findIndex(g=>g.id===genId);
+    if (i>=0) { stopGenPoll(genId); delete liveGen[genId]; delete liveGenModbus[genId]; gr.generators.splice(i,1); renderStnList(); renderAll(); return; }
+    for (const s of gr.stations) {
+      const j = (s.generators||[]).findIndex(g=>g.id===genId);
+      if (j>=0) { stopGenPoll(genId); delete liveGen[genId]; delete liveGenModbus[genId]; s.generators.splice(j,1); renderStnList(); renderAll(); return; }
+    }
+  }
+}
+
+function updGenerator(genId, k, v) {
+  for (const gr of cfg.groups) {
+    let gen = (gr.generators||[]).find(g=>g.id===genId);
+    if (gen) { gen[k]=v; return; }
+    for (const s of gr.stations) {
+      gen = (s.generators||[]).find(g=>g.id===genId);
+      if (gen) { gen[k]=v; return; }
+    }
+  }
+}
+
+function removeGroup(gId) {
+  const gr = cfg.groups.find(g=>g.id===gId);
+  if (gr) {
+    gr.stations.forEach(s => {
+      stopPoll(s.id); delete live[s.id]; delete liveStream[s.id];
+      (s.generators||[]).forEach(gen => { stopGenPoll(gen.id); delete liveGen[gen.id]; delete liveGenModbus[gen.id]; });
+    });
+    (gr.generators||[]).forEach(gen => { stopGenPoll(gen.id); delete liveGen[gen.id]; delete liveGenModbus[gen.id]; });
+  }
+  cfg.groups = cfg.groups.filter(g=>g.id!==gId);
+  renderStnList(); renderAll();
+}
+
+function addStation(gId) {
+  const gr = cfg.groups.find(g=>g.id===gId); if(!gr) return;
+  gr.stations.push({ id:uid(), name:`Rádio ${gr.stations.length+1}`, url:'http://IP:56000/readTELEMETRY', streamUrl:'', generators:[], interval:cfg.interval, enabled:true });
+  renderStnList();
+}
+
+function removeStn(id) {
+  let gone;
+  for (const gr of cfg.groups) {
+    const i = gr.stations.findIndex(s=>s.id===id);
+    if (i>=0) { gone = gr.stations.splice(i,1)[0]; break; }
+  }
+  stopPoll(id); delete live[id]; delete liveStream[id];
+  (gone?.generators||[]).forEach(gen => { stopGenPoll(gen.id); delete liveGen[gen.id]; delete liveGenModbus[gen.id]; });
+  renderStnList(); renderAll();
+}
+
+function updStn(id, k, v) {
+  for (const gr of cfg.groups) { const s=gr.stations.find(s=>s.id===id); if(s){ s[k]=v; return; } }
+}
+
+function updGroup(gId, k, v) { const gr=cfg.groups.find(g=>g.id===gId); if(gr) gr[k]=v; }
+
+function tglStn(id) {
+  let s; for (const gr of cfg.groups) { s=gr.stations.find(s=>s.id===id); if(s) break; }
+  if(!s) return;
+  s.enabled=!s.enabled;
+  if(!s.enabled){ stopPoll(id); } else { startPoll(s); }
+  renderStnList(); renderAll();
+}
+
+function testStn(id) {
+  let s; for (const gr of cfg.groups) { s=gr.stations.find(s=>s.id===id); if(s) break; }
+  if(!s) return;
+  live[id]={ data:live[id]?.data||null, err:null, loading:true, ts:live[id]?.ts||null };
+  renderAll(); fetchStn(s);
+}
+
+function saveCfg() {
+  cfg.interval = +document.getElementById('gInterval').value||5;
+  saveCfgToStorage(); restartAll();
+  const b = document.getElementById('saveBtn');
+  const orig = b.innerHTML;
+  b.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Salvo!';
+  setTimeout(() => { b.innerHTML = orig; }, 2000);
+}
+
+/* ── EXPORTAR / IMPORTAR CONFIGURAÇÃO ── */
+function exportCfg() {
+  const data = JSON.stringify(cfg, null, 2);
+  const blob = new Blob([data], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const ts = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+  a.href = url;
+  a.download = `broadcast-monitor-config-${ts}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function importCfg() {
+  document.getElementById('importFileInput').click();
+}
+
+function handleImportFile(e) {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    let parsed;
+    try {
+      parsed = JSON.parse(reader.result);
+    } catch (err) {
+      alert('Arquivo inválido: não é um JSON válido.');
+      return;
+    }
+    if (!parsed || !Array.isArray(parsed.groups)) {
+      alert('Arquivo inválido: não parece ser uma configuração do PlayMonitor (falta "groups").');
+      return;
+    }
+    const oldCount = cfg.groups.length;
+    const newCount = parsed.groups.length;
+    const msg = `Importar vai SUBSTITUIR a configuração atual (${oldCount} grupo${oldCount!==1?'s':''}) pela do arquivo (${newCount} grupo${newCount!==1?'s':''}). Essa ação não pode ser desfeita. Continuar?`;
+    if (!confirm(msg)) return;
+
+    // para tudo que está rodando na config atual antes de trocar
+    cfg.groups.forEach(gr => {
+      gr.stations.forEach(s => stopPoll(s.id));
+      (gr.generators||[]).forEach(gen => stopGenPoll(gen.id));
+    });
+
+    cfg = { ...defCfg(), ...parsed };
+    saveCfgToStorage();
+    live = {}; liveStream = {}; liveGen = {};
+    groupCollapsed = {}; cardCollapsed = {}; genCollapsed = {}; rowExpanded = {};
+
+    applyTheme();
+    renderStnList();
+    renderAll();
+    restartAll();
+    alert('Configuração importada com sucesso.');
+  };
+  reader.onerror = () => alert('Erro ao ler o arquivo.');
+  reader.readAsText(file);
+}
+
+/* ── THEME / CONFIG MODAL ── */
+function applyTheme() { document.documentElement.setAttribute('data-theme', cfg.theme); }
+function toggleTheme() { cfg.theme=cfg.theme==='dark'?'light':'dark'; applyTheme(); saveCfgToStorage(); }
+
+function openCfg() {
+  cfg.groups.forEach(gr => { if (cfgGrpCollapsed[gr.id] === undefined) cfgGrpCollapsed[gr.id] = true; });
+  renderStnList();
+  document.getElementById('cfgModal').classList.add('open');
+}
+function closeCfg() {
+  document.getElementById('cfgModal').classList.remove('open');
+}
+function toggleCfg() {
+  const open = document.getElementById('cfgModal').classList.contains('open');
+  open ? closeCfg() : openCfg();
+}
+
+/* ── ALERT ENGINE ── */
+let eventLog = [];
+let genAlertSt = {};
+let bannerDismissed = new Set(); // `${genId}:${condKey}`
+
+const ALERT_DELAYS = {
+  gridDown: 4000,
+  notAuto: 30000,
+  genFailedToStart: 45000,
+  genNoVoltage: 8000,
+  battLow: 30000,
+  genStopped: 3000,
+  oilLow: 8000,
+};
+
+function addEvent(genId, genName, icon, level, condKey, msg, detail) {
+  const id = `${Date.now()}-${Math.random().toString(36).slice(2,7)}`;
+  eventLog.unshift({ id, ts: Date.now(), icon, level, condKey, msg, detail: detail||'', genId, genName });
+  if (eventLog.length > 200) eventLog.pop();
+  // New event for same condition re-enables the banner strip
+  if (condKey) bannerDismissed.delete(`${genId}:${condKey}`);
+  saveAlertState();
+  updateBell();
+  renderAlertBanner();
+  if (document.getElementById('alertLogModal')?.classList.contains('open')) renderAlertLogBody();
+}
+
+function updateBell() {
+  const bellKeys = ['dse855Offline','gridDown','genFailedToStart','genNoVoltage','controllerAlarm','modbusAlarm','moduleLink','battLow','oilLow','streamDown'];
+  const active = Object.values(genAlertSt).some(st =>
+    Object.entries(st.active).some(([k,v]) => v && bellKeys.includes(k))
+  );
+  const cnt = document.getElementById('bellCnt');
+  if (!cnt) return;
+  cnt.style.display = active ? '' : 'none';
+  cnt.textContent = active ? '!' : '';
+}
+
+function renderAlertBanner() {
+  const banner = document.getElementById('alertBanner');
+  if (!banner) return;
+  const strips = [];
+  for (const [genId, st] of Object.entries(genAlertSt)) {
+    for (const [condKey, active] of Object.entries(st.active)) {
+      if (!active) continue;
+      const dismissKey = `${genId}:${condKey}`;
+      if (bannerDismissed.has(dismissKey)) continue;
+      const ev = eventLog.find(e => e.genId === genId && e.condKey === condKey);
+      if (!ev) continue;
+      const lvCls = ev.level==='crit' ? 'al-strip-crit' : ev.level==='high' ? 'al-strip-high' : 'al-strip-info';
+      strips.push(`<div class="al-strip ${lvCls}">
+        <span class="al-strip-icon">${ev.icon}</span>
+        <div class="al-strip-body">
+          <div class="al-strip-msg">${esc(ev.msg)}</div>
+          ${ev.detail ? `<div class="al-strip-det">${esc(ev.detail)}</div>` : ''}
+        </div>
+        <span class="al-strip-ts">${new Date(ev.ts).toLocaleTimeString('pt-BR')}</span>
+        <button class="al-strip-x" onclick="dismissBannerItem('${genId}','${condKey}')" title="Dispensar">×</button>
+      </div>`);
+    }
+  }
+  setHtmlIfChanged(banner, 'alertBanner', strips.join(''));
+}
+
+function dismissBannerItem(genId, condKey) {
+  bannerDismissed.add(`${genId}:${condKey}`);
+  renderAlertBanner();
+}
+
+function renderAlertLogBody() {
+  const body = document.getElementById('alertLogBody');
+  if (!body) return;
+  if (!eventLog.length) {
+    body.innerHTML = `<div class="al-empty">Nenhum evento registrado.</div>`;
+    return;
+  }
+  body.innerHTML = eventLog.map(ev => `<div class="al-log-entry">
+    <span class="al-log-icon">${ev.icon}</span>
+    <div class="al-log-body">
+      <div class="al-log-msg">${esc(ev.msg)}</div>
+      ${ev.detail ? `<div class="al-log-det">${esc(ev.detail)}</div>` : ''}
+    </div>
+    <span class="al-log-ts">${new Date(ev.ts).toLocaleTimeString('pt-BR')}</span>
+  </div>`).join('');
+}
+
+function openAlertLog()  { renderAlertLogBody(); document.getElementById('alertLogModal').classList.add('open'); }
+function closeAlertLog() { document.getElementById('alertLogModal').classList.remove('open'); }
+function toggleAlertLog() {
+  document.getElementById('alertLogModal').classList.contains('open') ? closeAlertLog() : openAlertLog();
+}
+function clearAlertLog() {
+  eventLog = [];
+  for (const st of Object.values(genAlertSt)) for (const k of Object.keys(st.active)) st.active[k] = false;
+  bannerDismissed.clear();
+  saveAlertState();
+  updateBell(); renderAlertBanner(); renderAlertLogBody();
+}
+
+function renderGenReportBody() {
+  const body = document.getElementById('genReportBody');
+  if (!body) return;
+  if (!genRunHistory.length) {
+    body.innerHTML = `<div class="al-empty">Nenhum registro de operação ainda.</div>`;
+    return;
+  }
+  body.innerHTML = genRunHistory.map(r => {
+    const label = r.parentName ? `${esc(r.genName)} <span style="color:var(--muted);font-weight:400">(${esc(r.parentName)})</span>` : esc(r.genName);
+    const started = new Date(r.startTs).toLocaleString('pt-BR');
+    const ended = r.endTs ? new Date(r.endTs).toLocaleString('pt-BR') : null;
+    const dur = fmtDuration(((r.endTs || Date.now()) - r.startTs) / 1000);
+    // approxEnd: o app estava fechado quando o gerador desligou de verdade —
+    // o horário exato não dá pra saber, "Desligou" aqui é só quando o app
+    // percebeu (reabriu), não o instante real.
+    const endedLabel = ended
+      ? ' · Desligou: ' + ended + (r.approxEnd ? ' (aproximado — app estava fechado)' : '')
+      : ' · Em andamento';
+    return `<div class="al-log-entry">
+      <span class="al-log-icon">${r.endTs ? '⚪' : '🟠'}</span>
+      <div class="al-log-body">
+        <div class="al-log-msg">${label}</div>
+        <div class="al-log-det">Ligou: ${started}${endedLabel}</div>
+      </div>
+      <span class="al-log-ts">${dur}</span>
+    </div>`;
+  }).join('');
+}
+function openGenReport() {
+  renderGenReportBody();
+  document.getElementById('genReportModal').classList.add('open');
+}
+function closeGenReport() { document.getElementById('genReportModal').classList.remove('open'); }
+function clearGenReport() {
+  genRunHistory = [];
+  saveGenRunHistory();
+  renderGenReportBody();
+}
+
+/* ── RANKING DE OUVINTES (streaming) ── */
+function computeListenerRanking() {
+  const rows = [];
+  cfg.groups.forEach(gr => {
+    gr.stations.forEach(stn => {
+      if (!stn.streamUrl) return;
+      const ss = liveStream[stn.id];
+      const loading = !ss || (ss.loading && !ss.sources?.length);
+      const online = !!ss?.online;
+      const src = ss?.sources?.[0];
+      rows.push({
+        name: stn.name, groupName: gr.name, loading, online,
+        listeners: online ? (src?.listeners ?? 0) : 0,
+        peak: src?.listener_peak ?? src?.ListenerPeak ?? null,
+        bitrate: src?.bitrate ?? src?.Bitrate ?? null,
+      });
+    });
+  });
+  rows.sort((a, b) => b.listeners - a.listeners);
+  return rows;
+}
+
+function renderRankingBody() {
+  const el = document.getElementById('rankingBody');
+  if (!el) return;
+  const rows = computeListenerRanking();
+  if (!rows.length) {
+    el.innerHTML = `<div class="al-empty">Nenhuma rádio com streaming configurado.</div>`;
+    return;
+  }
+  const medals = ['🥇', '🥈', '🥉'];
+  el.innerHTML = rows.map((r, i) => {
+    const rankIcon = medals[i] || `<span style="color:var(--muted);font-weight:700">${i + 1}º</span>`;
+    const statusPill = r.loading
+      ? `<span style="font-size:10px;color:var(--muted)">⟳ conectando...</span>`
+      : r.online
+        ? `<span class="pill on" style="font-size:9px;padding:2px 7px"><span class="pill-d"></span>Online</span>`
+        : `<span class="pill off" style="font-size:9px;padding:2px 7px"><span class="pill-d"></span>Offline</span>`;
+    const extra = [
+      r.peak != null ? `pico ${r.peak}` : '',
+      r.bitrate != null ? `${r.bitrate} kbps` : '',
+    ].filter(Boolean).join(' · ');
+    return `<div class="al-log-entry">
+      <span class="al-log-icon" style="font-size:${i < 3 ? '18px' : '13px'};width:22px">${rankIcon}</span>
+      <div class="al-log-body">
+        <div class="al-log-msg">${esc(r.name)} <span style="color:var(--muted);font-weight:400">(${esc(r.groupName)})</span></div>
+        <div class="al-log-det">${statusPill}${extra ? ' · ' + extra : ''}</div>
+      </div>
+      <span class="al-log-ts" style="font-size:17px;font-weight:800;color:var(--num);font-variant-numeric:tabular-nums">${r.listeners}</span>
+    </div>`;
+  }).join('');
+}
+
+function openRanking() {
+  renderRankingBody();
+  document.getElementById('rankingModal').classList.add('open');
+}
+function closeRanking() { document.getElementById('rankingModal').classList.remove('open'); }
+
+function renderRankingPanel() {
+  const el = document.getElementById('rankingPanel');
+  if (!el) return;
+  const rows = computeListenerRanking();
+  if (!rows.length) { setHtmlIfChanged(el, 'rankingPanel', ''); el.style.display = 'none'; return; }
+  el.style.display = '';
+  const medals = ['🥇', '🥈', '🥉'];
+  const items = rows.map((r, i) => {
+    const rankLbl = medals[i] || `${i + 1}º`;
+    return `<div class="rank-item">
+      <span class="rank-pos">${rankLbl}</span>
+      <span class="rank-name">${esc(r.name)}</span>
+      <span class="rank-num${r.online ? '' : ' off'}">${r.listeners}</span>
+    </div>`;
+  }).join('');
+  setHtmlIfChanged(el, 'rankingPanel', `
+    <div class="rank-panel-hd">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      Ranking de Ouvintes Online
+    </div>
+    ${items}
+    <button class="btn" style="width:100%;justify-content:center;margin-top:8px;font-size:11px" onclick="openRanking()">Ver detalhes (pico/bitrate)</button>
+  `);
+}
+
+function initGenAlertSt(genId) {
+  if (!genAlertSt[genId]) genAlertSt[genId] = { pending:{}, active:{}, fetchFailCount:0, prevData:null };
+}
+
+function setPendingAlert(genId, key, delay, fn) {
+  const st = genAlertSt[genId];
+  if (st.pending[key]) clearTimeout(st.pending[key]);
+  st.pending[key] = setTimeout(() => { delete st.pending[key]; fn(); }, delay);
+}
+
+function clearPendingAlert(genId, key) {
+  const st = genAlertSt[genId];
+  if (st.pending[key]) { clearTimeout(st.pending[key]); delete st.pending[key]; }
+}
+
+function getGenParentName(genId) {
+  for (const gr of cfg.groups) {
+    if ((gr.generators||[]).some(g => g.id === genId)) return gr.name || null;
+    for (const stn of gr.stations||[]) {
+      if ((stn.generators||[]).some(g => g.id === genId)) return stn.name || null;
+    }
+  }
+  return null;
+}
+
+function findGenById(genId) {
+  for (const gr of cfg.groups) {
+    let gen = (gr.generators||[]).find(g => g.id === genId);
+    if (gen) return gen;
+    for (const stn of gr.stations||[]) {
+      gen = (stn.generators||[]).find(g => g.id === genId);
+      if (gen) return gen;
+    }
+  }
+  return null;
+}
+
+// Host usado pros comandos de controle Modbus: o mesmo host já usado pra
+// leitura, seja via URL JSON (extrai o domínio) ou via host Modbus direto.
+function genControlHost(gen) {
+  return gen.modbusHost || hostFromUrl(gen.url || '');
+}
+
+const GEN_CONTROL_LABELS = {
+  start:  { verb: 'ligar (dar partida n)o', warn: 'Isso vai tentar dar partida no motor agora. Só funciona se o controlador já estiver em modo Manual ou Teste.' },
+  stop:   { verb: 'desligar o', warn: 'Isso vai parar o motor e colocar o controlador em modo Stop.' },
+  auto:   { verb: 'colocar em modo AUTOMÁTICO o', warn: 'O gerador vai partir sozinho em caso de falta de energia.' },
+  manual: { verb: 'colocar em modo MANUAL o', warn: 'O gerador NÃO vai partir sozinho em caso de falta de energia enquanto estiver em manual.' },
+};
+
+async function sendGenControlCmd(genId, action) {
+  const gen = findGenById(genId);
+  if (!gen) return;
+  const host = genControlHost(gen);
+  if (!host) { alert('Sem host Modbus configurado pra esse gerador.'); return; }
+  const lbl = GEN_CONTROL_LABELS[action];
+  const genName = gen.name || 'Gerador';
+  const parentName = getGenParentName(genId);
+  const genLabel = parentName ? `${genName} (${parentName})` : genName;
+  if (!confirm(`Confirma o comando pra ${lbl.verb} gerador "${genLabel}"?\n\n${lbl.warn}\n\nHost: ${host}:${Number(gen.modbusPort)||502}`)) return;
+  const port = Number(gen.modbusPort) || 502;
+  try {
+    const res = await window.modbusAPI.sendGenControl(host, port, action);
+    if (res.success) {
+      addEvent(genId, genName, '🔧', 'info', null, `${genLabel}: comando "${action}" enviado manualmente`, `Enviado pelo painel de controle do app.`);
+      setTimeout(() => { const g = findGenById(genId); if (g) (g.url ? fetchGen(g) : fetchGenModbus(g)); }, 1500);
+    } else {
+      alert('Falha ao enviar comando: ' + res.error);
+    }
+  } catch(e) {
+    alert('Falha ao enviar comando: ' + (e.message || e));
+  }
+}
+
+function evaluateGenAlerts(gen, gs) {
+  const gId = gen.id;
+  const gName = gen.name || 'Gerador';
+  const parentName = getGenParentName(gId);
+  const genLabel = parentName ? `${gName} (${parentName})` : gName;
+  initGenAlertSt(gId);
+  const st = genAlertSt[gId];
+
+  // ── DSE855/GERADOR INACESSÍVEL ──
+  const viaModbusOnly = !gen.url && gen.modbusHost;
+  if (gs?.err && !gs.data) {
+    st.fetchFailCount = (st.fetchFailCount||0) + 1;
+    if (st.fetchFailCount >= 3 && !st.active.dse855Offline) {
+      st.active.dse855Offline = true;
+      const title = viaModbusOnly ? 'GERADOR INACESSÍVEL (MODBUS)' : 'DSE855 INACESSÍVEL';
+      const detail = viaModbusOnly ? 'Sem resposta na porta Modbus após 3 tentativas.' : 'realtime.cgi não responde após 3 tentativas.';
+      addEvent(gId, gName, '🚨', 'crit', 'dse855Offline', `${genLabel}: ${title}`, detail);
+    }
+    st.prevData = null; updateBell(); renderAlertBanner(); return;
+  }
+  if (st.active.dse855Offline) {
+    st.active.dse855Offline = false;
+    st.fetchFailCount = 0;
+    addEvent(gId, gName, '🟢', 'ok', 'dse855Offline', `${genLabel}: DSE855 voltou a responder`);
+  }
+  st.fetchFailCount = 0;
+
+  const d = gs?.data;
+  if (!d) { st.prevData = null; return; }
+
+  // ── SEM LIGAÇÃO COM O CONTROLADOR ──
+  // Módulo DSE855 responde via HTTP, mas perdeu a comunicação interna com a
+  // placa do gerador (LINK:0) — nesse estado o dispositivo manda valores-sentinela
+  // pra tudo (inclusive ALARMLEVEL, que pode aparecer como 65535/"Shutdown" na
+  // interface do próprio DSE sem ser um alarme real do gerador). Sem visão
+  // nenhuma desse gerador até a ligação voltar, então avisa e para por aqui.
+  if (d.link === false) {
+    if (!st.active.moduleLink) {
+      st.active.moduleLink = true;
+      addEvent(gId, gName, '🚨', 'crit', 'moduleLink', `${genLabel}: SEM LIGAÇÃO COM O CONTROLADOR`,
+        'Módulo DSE855 acessível, mas sem comunicação com a placa do gerador — dados indisponíveis.');
+    }
+    st.prevData = null; updateBell(); renderAlertBanner(); return;
+  }
+  if (st.active.moduleLink) {
+    st.active.moduleLink = false;
+    addEvent(gId, gName, '🟢', 'ok', 'moduleLink', `${genLabel}: Ligação com o controlador restabelecida`);
+  }
+
+  // ── ALARME DO CONTROLADOR ──
+  // usa d.fault (já filtra ALARMLEVEL fora da faixa plausível) em vez de reler
+  // d.alarmLevel bruto aqui, pra não divergir do critério usado no resto do app
+  const hasAlarm = d.fault;
+  if (hasAlarm && !st.active.controllerAlarm) {
+    st.active.controllerAlarm = true;
+    const lst = (d.alarms||[]).map(a=>typeof a==='string'?a:JSON.stringify(a)).join(', ');
+    // Código oficial DSE GenComm: 2 = aviso, 3 = desligamento — diferencia a
+    // urgência em vez de tratar os dois como igualmente críticos.
+    const isShutdown = d.alarmLevel === 3;
+    const icon = isShutdown ? '🚨' : '⚠️';
+    const level = isShutdown ? 'crit' : 'high';
+    const title = isShutdown ? 'DESLIGAMENTO DO CONTROLADOR' : 'AVISO DO CONTROLADOR';
+    // Nomes dos canais específicos via Modbus (porta 502 por padrão), quando
+    // disponível — só complementa a mensagem, nunca condiciona o alerta em si.
+    const mb = liveGenModbus[gId];
+    const mbInfo = (mb && mb.ok && mb.active.length)
+      ? ` [Modbus: ${mb.active.map(a => a.name).join(', ')}]`
+      : '';
+    addEvent(gId, gName, icon, level, 'controllerAlarm', `${genLabel}: ${title}`,
+      (lst || (isShutdown ? 'Alarme de desligamento ativo.' : 'Alarme de aviso ativo.')) + mbInfo);
+  } else if (!hasAlarm && st.active.controllerAlarm) {
+    st.active.controllerAlarm = false;
+    addEvent(gId, gName, '🟢', 'ok', 'controllerAlarm', `${genLabel}: Alarmes do controlador limpos`);
+  }
+
+  // ── GERADOR FORA DE AUTO ──
+  const isAuto = d.modeStr === 'AUTO';
+  if (!isAuto && d.modeStr != null) {
+    if (!st.pending.notAuto && !st.active.notAuto)
+      setPendingAlert(gId, 'notAuto', ALERT_DELAYS.notAuto, () => {
+        const curr = liveGen[gId]?.data;
+        if (curr?.modeStr !== 'AUTO') {
+          genAlertSt[gId].active.notAuto = true;
+          addEvent(gId, gName, '⚠️', 'high', 'notAuto', `${genLabel}: FORA DO AUTOMÁTICO`,
+            `Controlador em modo ${curr.modeStr}. Não acionará o gerador em caso de falta de rede.`);
+        }
+      });
+  } else {
+    clearPendingAlert(gId, 'notAuto');
+    if (st.active.notAuto) {
+      st.active.notAuto = false;
+      addEvent(gId, gName, '🟢', 'ok', 'notAuto', `${genLabel}: Modo automático restaurado`);
+    }
+  }
+
+  // ── FALTA DE REDE ──
+  const gridFreqZero = d.gridFreq != null && d.gridFreq < 10;
+  const gridVoltsZero = d.gridL1N != null && d.gridL2N != null && d.gridL3N != null
+    && d.gridL1N < 10 && d.gridL2N < 10 && d.gridL3N < 10;
+  const gridDown = gridFreqZero || gridVoltsZero;
+
+  if (gridDown) {
+    if (!st.pending.gridDown && !st.active.gridDown)
+      setPendingAlert(gId, 'gridDown', ALERT_DELAYS.gridDown, () => {
+        const curr = liveGen[gId]?.data;
+        const still = (curr?.gridFreq != null && curr.gridFreq < 10)
+          || (curr?.gridL1N < 10 && curr?.gridL2N < 10 && curr?.gridL3N < 10);
+        if (still) {
+          genAlertSt[gId].active.gridDown = true;
+          addEvent(gId, gName, '🚨', 'crit', 'gridDown', `${genLabel}: FALTA DE REDE ELÉTRICA`,
+            'Rede comercial indisponível. Aguardando partida do gerador.');
+        }
+      });
+  } else {
+    clearPendingAlert(gId, 'gridDown');
+    if (st.active.gridDown) {
+      st.active.gridDown = false;
+      clearPendingAlert(gId, 'genFailedToStart');
+      st.active.genFailedToStart = false;
+      addEvent(gId, gName, '🟢', 'ok', 'gridDown', `${genLabel}: Rede elétrica restabelecida`);
+    }
+  }
+
+  // ── GERADOR NÃO PARTIU ──
+  const currRpm = d.rpm ?? 0;
+  if (st.active.gridDown && isAuto && currRpm === 0) {
+    if (!st.pending.genFailedToStart && !st.active.genFailedToStart)
+      setPendingAlert(gId, 'genFailedToStart', ALERT_DELAYS.genFailedToStart, () => {
+        if (genAlertSt[gId].active.gridDown && (liveGen[gId]?.data?.rpm ?? 0) === 0) {
+          genAlertSt[gId].active.genFailedToStart = true;
+          addEvent(gId, gName, '🚨', 'crit', 'genFailedToStart', `${genLabel}: GERADOR NÃO PARTIU`,
+            'Rede comercial ausente e grupo gerador permanece parado.');
+        }
+      });
+  } else if (currRpm > 0 || !st.active.gridDown) {
+    clearPendingAlert(gId, 'genFailedToStart');
+  }
+
+  // ── TRANSIÇÕES RPM: partiu / desligou ──
+  // Na primeira leitura desta sessão (app acabou de abrir) não existe leitura
+  // anterior de verdade pra comparar. Sem tratamento especial, isso causa dois
+  // bugs: um gerador que já estava ligado dispara um "início" fantasma agora
+  // (perdendo o horário real de partida), e um que desligou com o app fechado
+  // nunca fecha o registro aberto (fica "Em andamento" pra sempre). Por isso,
+  // na primeira leitura, concilia com o relatório: se já existe um registro
+  // aberto pra esse gerador, o estado atual decide o que fazer com ele — sem
+  // criar um novo início nem soltar o alerta "gerador desligado" como se
+  // tivesse acabado de acontecer.
+  let prevRpm = st.prevData?.rpm ?? 0;
+  if (st.prevData === null) {
+    const openRun = genRunHistory.find(r => r.genId === gId && r.endTs == null);
+    if (openRun) {
+      if (currRpm > 0) {
+        prevRpm = currRpm; // continuação do registro já aberto, não é um novo início
+      } else {
+        openRun.endTs = Date.now();
+        openRun.approxEnd = true;
+        saveGenRunHistory();
+      }
+    }
+  }
+  if (prevRpm === 0 && currRpm > 0) {
+    clearPendingAlert(gId, 'genFailedToStart');
+    st.active.genFailedToStart = false;
+    clearPendingAlert(gId, 'genStopped');
+    const parts = [
+      `${currRpm} RPM`,
+      d.genFreq != null ? `${d.genFreq.toFixed(1)} Hz` : '',
+      d.genL1N != null && d.genL2N != null && d.genL3N != null
+        ? `${d.genL1N.toFixed(1)} / ${d.genL2N.toFixed(1)} / ${d.genL3N.toFixed(1)} V` : '',
+    ].filter(Boolean).join(' • ');
+    addEvent(gId, gName, '🟠', 'info', 'genRunning', `${genLabel}: GERADOR EM FUNCIONAMENTO`, parts);
+    startGenRun(gId, gName, parentName, Date.now());
+  } else if (prevRpm > 0 && currRpm === 0) {
+    if (!st.pending.genStopped)
+      setPendingAlert(gId, 'genStopped', ALERT_DELAYS.genStopped, () => {
+        if ((liveGen[gId]?.data?.rpm ?? 0) === 0) {
+          addEvent(gId, gName, '⚪', 'info', 'genRunning', `${genLabel}: Gerador desligado`);
+          endGenRun(gId, Date.now());
+          const curr = liveGen[gId]?.data;
+          if (curr && !genAlertSt[gId].active.gridDown && curr.modeStr === 'AUTO')
+            addEvent(gId, gName, '🟢', 'ok', null, `${genLabel}: Sistema normal — AUTO`);
+        }
+      });
+  }
+
+  // ── GERADOR SEM TENSÃO NA SAÍDA ──
+  const genHasV = (d.genL1N ?? 0) > 10;
+  if (currRpm > 100 && !genHasV) {
+    if (!st.pending.genNoVoltage && !st.active.genNoVoltage)
+      setPendingAlert(gId, 'genNoVoltage', ALERT_DELAYS.genNoVoltage, () => {
+        const curr = liveGen[gId]?.data;
+        if ((curr?.rpm ?? 0) > 100 && (curr?.genL1N ?? 0) < 10) {
+          genAlertSt[gId].active.genNoVoltage = true;
+          addEvent(gId, gName, '🚨', 'crit', 'genNoVoltage', `${genLabel}: GERADOR SEM TENSÃO NA SAÍDA`,
+            'Motor em operação mas sem tensão detectada nas fases de saída.');
+        }
+      });
+  } else {
+    clearPendingAlert(gId, 'genNoVoltage');
+    if (st.active.genNoVoltage) {
+      st.active.genNoVoltage = false;
+      addEvent(gId, gName, '🟢', 'ok', 'genNoVoltage', `${genLabel}: Tensão do gerador normalizada`,
+        d.genL1N != null ? `L1 ${d.genL1N.toFixed(1)}V / L2 ${d.genL2N?.toFixed(1)}V / L3 ${d.genL3N?.toFixed(1)}V` : '');
+    }
+  }
+
+  // ── BATERIA BAIXA ──
+  if (d.batt != null) {
+    if (d.batt < 11.5 && !st.pending.battLow && !st.active.battLow)
+      setPendingAlert(gId, 'battLow', ALERT_DELAYS.battLow, () => {
+        const curr = liveGen[gId]?.data;
+        if ((curr?.batt ?? 99) < 11.5) {
+          genAlertSt[gId].active.battLow = true;
+          addEvent(gId, gName, '🔋', 'high', 'battLow', `${genLabel}: BATERIA BAIXA`,
+            `${curr.batt.toFixed(1)} V — verifique o carregador.`);
+        }
+      });
+    else if (d.batt >= 12.0) {
+      clearPendingAlert(gId, 'battLow');
+      if (st.active.battLow) {
+        st.active.battLow = false;
+        addEvent(gId, gName, '🟢', 'ok', 'battLow', `${genLabel}: Bateria normalizada — ${d.batt.toFixed(1)} V`);
+      }
+    }
+  }
+
+  // ── PRESSÃO DE ÓLEO BAIXA (só faz sentido avaliar com o motor em funcionamento —
+  //    parado, a pressão cai a zero naturalmente e não é uma falha) ──
+  if (d.running) {
+    const oilZero = d.oilPress != null && d.oilPress <= 0;
+    if (oilZero) {
+      if (!st.pending.oilLow && !st.active.oilLow)
+        setPendingAlert(gId, 'oilLow', ALERT_DELAYS.oilLow, () => {
+          const curr = liveGen[gId]?.data;
+          if (curr?.running && (curr?.oilPress ?? -1) <= 0) {
+            genAlertSt[gId].active.oilLow = true;
+            addEvent(gId, gName, '🚨', 'crit', 'oilLow', `${genLabel}: PRESSÃO DE ÓLEO BAIXA`,
+              'Motor em funcionamento sem pressão de óleo detectada.');
+          }
+        });
+    } else {
+      clearPendingAlert(gId, 'oilLow');
+      if (st.active.oilLow) {
+        st.active.oilLow = false;
+        addEvent(gId, gName, '🟢', 'ok', 'oilLow', `${genLabel}: Pressão de óleo normalizada`,
+          d.oilPress != null ? `${d.oilPress} kPa` : '');
+      }
+    }
+  } else {
+    clearPendingAlert(gId, 'oilLow');
+    if (st.active.oilLow) {
+      st.active.oilLow = false;
+      addEvent(gId, gName, '🟢', 'ok', 'oilLow', `${genLabel}: Pressão de óleo normalizada (motor parado)`);
+    }
+  }
+
+  st.prevData = d;
+  updateBell();
+  renderAlertBanner();
+}
+
+/* ── INIT ── */
+function init() {
+  applyTheme();
+  loadAlertState();
+  loadGenRunHistory();
+  loadGroupLayout();
+  loadGroupDensity();
+  renderStnList();
+  renderAll();
+  updateBell();
+  renderAlertBanner();
+
+  document.getElementById('stnGrid').addEventListener('click', e => {
+    const genBar = e.target.closest('.sec-bar-gen');
+    if (genBar) {
+      const chev = genBar.querySelector('[id^="genchev-"]');
+      if (chev) toggleGen(chev.id.slice(8));
+      return;
+    }
+    const row = e.target.closest('.row-compact');
+    if (row) {
+      toggleRow(row.dataset.station);
+      return;
+    }
+    const head = e.target.closest('.c-head');
+    if (!head) return;
+    const card = head.closest('[id^="card-"]');
+    if (!card) return;
+    toggleCard(card.id.slice(5));
+  });
+
+  document.getElementById('sidebar').addEventListener('click', e => {
+    const item = e.target.closest('.sb-item');
+    if (!item) return;
+    scrollToGroup(item.dataset.group);
+  });
+
+  document.getElementById('summaryBar').addEventListener('click', e => {
+    const chip = e.target.closest('.sum-chip');
+    if (!chip) return;
+    setFilter(chip.dataset.filter);
+  });
+
+  const allStns = cfg.groups.flatMap(g=>g.stations);
+  const hasReal = allStns.some(s=>!s.url.includes('IP:'));
+  if (!hasReal || !allStns.length) openCfg();
+  cfg.groups.forEach(gr => {
+    gr.stations.forEach(s => startPoll(s));
+    (gr.generators||[]).forEach(gen => startGenPoll(gen));
+  });
+}
+
+window.addEventListener('error', e => {
+  console.error('UNCAUGHT: ' + e.message + ' @ ' + e.filename + ':' + e.lineno + ':' + e.colno + '\n' + (e.error && e.error.stack || ''));
+});
+window.addEventListener('unhandledrejection', e => {
+  console.error('UNHANDLED REJECTION: ' + (e.reason && e.reason.stack || e.reason));
+});
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>

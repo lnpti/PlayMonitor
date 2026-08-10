@@ -1,0 +1,55 @@
+{
+  "name": "playmonitor",
+  "version": "1.0.0",
+  "description": "PlayMonitor — Monitoramento de transmissores FM, geradores e streaming",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win --x64",
+    "build:portable": "electron-builder --win portable --x64",
+    "build:publish": "electron-builder --win --x64 --publish always"
+  },
+  "devDependencies": {
+    "electron": "^31.7.7",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.playmonitor.app",
+    "productName": "PlayMonitor",
+    "icon": "PlayMonitor.png",
+    "publish": {
+      "provider": "github",
+      "owner": "lnpti",
+      "repo": "PlayMonitor"
+    },
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "dashboard.html",
+      "main.js",
+      "preload.js",
+      "package.json",
+      "PlayMonitor.png"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
+  }
+}
