@@ -8,3 +8,9 @@ contextBridge.exposeInMainWorld('modbusAPI', {
   readGenerator: (host, port) => ipcRenderer.invoke('modbus-read-generator', { host, port }),
   sendGenControl: (host, port, action) => ipcRenderer.invoke('modbus-gen-control', { host, port, action }),
 });
+
+contextBridge.exposeInMainWorld('updateAPI', {
+  checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
+  getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+  onStatus: (callback) => ipcRenderer.on('update-status', (event, data) => callback(data)),
+});

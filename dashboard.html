@@ -372,6 +372,11 @@ body.dragging-group *{cursor:grabbing!important}
   </div>
   <div class="hd-right">
     <span id="globalTs" style="font-size:11px;color:var(--muted)"></span>
+    <span id="updateStatus" style="font-size:11px;color:var(--muted)"></span>
+    <button class="btn" id="updateBtn" onclick="checkForUpdates()" title="Verificar atualizações">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+      Atualizações
+    </button>
     <button class="btn" onclick="toggleTheme()" title="Alternar tema">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
       Tema
@@ -508,16 +513,7 @@ function defCfg() {
   return {
     theme: 'dark',
     interval: 5,
-    groups: [{
-      id: uid(), name: 'Grupo Principal', generators: [],
-      stations: [{
-        id: uid(), name: 'Rádio Principal',
-        url: 'http://131.108.181.230:56000/readTELEMETRY',
-        streamUrl: 'https://painel.sintonizar.tv.br:10106',
-        generators: [],
-        interval: 5, enabled: true
-      }]
-    }]
+    groups: []
   };
 }
 
@@ -2478,6 +2474,31 @@ function handleImportFile(e) {
 function applyTheme() { document.documentElement.setAttribute('data-theme', cfg.theme); }
 function toggleTheme() { cfg.theme=cfg.theme==='dark'?'light':'dark'; applyTheme(); saveCfgToStorage(); }
 
+/* ── Atualizações (GitHub Releases via electron-updater) ── */
+async function checkForUpdates() {
+  const el = document.getElementById('updateStatus');
+  const btn = document.getElementById('updateBtn');
+  if (!window.updateAPI) { if (el) el.textContent = 'Atualização indisponível'; return; }
+  btn.disabled = true;
+  if (el) el.textContent = 'Verificando...';
+  const res = await window.updateAPI.checkForUpdates();
+  btn.disabled = false;
+  if (!res.success && el) el.textContent = 'Falha ao verificar: ' + res.error;
+}
+
+function renderUpdateStatus(data) {
+  const el = document.getElementById('updateStatus');
+  if (!el) return;
+  switch (data.status) {
+    case 'checking': el.textContent = 'Verificando...'; break;
+    case 'available': el.textContent = `Baixando v${data.version}...`; break;
+    case 'not-available': el.textContent = 'Você já está na versão mais recente'; setTimeout(() => { if (el.textContent.includes('mais recente')) el.textContent = ''; }, 5000); break;
+    case 'downloading': el.textContent = `Baixando... ${data.percent}%`; break;
+    case 'downloaded': el.textContent = `v${data.version} pronta — reinicie para aplicar`; break;
+    case 'error': el.textContent = 'Erro ao verificar atualização'; break;
+  }
+}
+
 function openCfg() {
   cfg.groups.forEach(gr => { if (cfgGrpCollapsed[gr.id] === undefined) cfgGrpCollapsed[gr.id] = true; });
   renderStnList();
@@ -3060,6 +3081,8 @@ function init() {
   renderAll();
   updateBell();
   renderAlertBanner();
+
+  if (window.updateAPI) window.updateAPI.onStatus(renderUpdateStatus);
 
   document.getElementById('stnGrid').addEventListener('click', e => {
     const genBar = e.target.closest('.sec-bar-gen');

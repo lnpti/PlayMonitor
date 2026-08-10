@@ -263,7 +263,19 @@ function createWindow() {
 autoUpdater.autoDownload = true;
 autoUpdater.autoInstallOnAppQuit = true;
 
+// Repassa o status pra tela poder mostrar feedback no botão "Verificar
+// atualizações" — sem isso o processo todo fica invisível pro usuário.
+function sendUpdateStatus(status, extra) {
+  if (mainWindow) mainWindow.webContents.send('update-status', { status, ...extra });
+}
+
+autoUpdater.on('checking-for-update', () => sendUpdateStatus('checking'));
+autoUpdater.on('update-available', (info) => sendUpdateStatus('available', { version: info.version }));
+autoUpdater.on('update-not-available', () => sendUpdateStatus('not-available'));
+autoUpdater.on('download-progress', (p) => sendUpdateStatus('downloading', { percent: Math.round(p.percent) }));
+
 autoUpdater.on('update-downloaded', (info) => {
+  sendUpdateStatus('downloaded', { version: info.version });
   if (!mainWindow) return;
   dialog.showMessageBox(mainWindow, {
     type: 'info',
@@ -280,7 +292,19 @@ autoUpdater.on('update-downloaded', (info) => {
 
 autoUpdater.on('error', (err) => {
   console.error('[autoUpdater] erro ao verificar/baixar atualização:', err.message);
+  sendUpdateStatus('error', { message: err.message });
 });
+
+ipcMain.handle('check-for-updates', async () => {
+  try {
+    await autoUpdater.checkForUpdates();
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e.message || String(e) };
+  }
+});
+
+ipcMain.handle('get-app-version', () => app.getVersion());
 
 app.whenReady().then(() => {
   createWindow();
