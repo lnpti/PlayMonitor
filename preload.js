@@ -14,3 +14,7 @@ contextBridge.exposeInMainWorld('updateAPI', {
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
   onStatus: (callback) => ipcRenderer.on('update-status', (event, data) => callback(data)),
 });
+
+contextBridge.exposeInMainWorld('notifyAPI', {
+  sendEmail: (payload) => ipcRenderer.invoke('send-email', payload),
+});

@@ -252,7 +252,7 @@ body.dragging-group *{cursor:grabbing!important}
 .grp-count{font-size:10px;color:var(--muted);background:var(--surf);border:1px solid var(--bdr);border-radius:8px;padding:1px 7px;font-weight:600}
 /* station config rows */
 .stn-row{display:flex;flex-direction:column;gap:0;padding:10px 12px;background:var(--surf2);border:1px solid var(--bdr);border-radius:var(--rs)}
-.stn-row-main{display:grid;grid-template-columns:110px 100px 1fr 80px auto auto auto;gap:8px;align-items:end}
+.stn-row-main{display:grid;grid-template-columns:100px 1fr 1fr 80px auto;gap:8px;align-items:end}
 .stn-row-stream{display:grid;grid-template-columns:150px 1fr;gap:8px;align-items:end;margin-top:8px;padding-top:8px;border-top:1px dashed var(--bdr)}
 .stn-row-gens{margin-top:8px;padding-top:8px;border-top:1px dashed var(--bdr)}
 .gen-row{display:flex;gap:8px;align-items:center;margin-bottom:6px}
@@ -486,6 +486,33 @@ body.dragging-group *{cursor:grabbing!important}
       </button>
     </div>
     <div class="modal-body">
+      <div class="grp-cfg" id="notifyGlobalCfg">
+        <div class="grp-cfg-hd" onclick="toggleNotifyGlobalCfg()" style="cursor:pointer;user-select:none">
+          <div style="display:flex;align-items:center;gap:8px;flex:1">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:.4;flex-shrink:0"><path d="M22 6l-10 7L2 6"/><rect x="2" y="4" width="20" height="16" rx="2"/></svg>
+            <span style="flex:1;font-weight:600">Notificações — E-mail (SMTP) e Telegram</span>
+          </div>
+          <svg id="notifyGlobalChev" class="grp-chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div id="notifyGlobalBody" style="display:none;padding:10px 4px 4px">
+          <div class="lbl" style="margin-bottom:6px">Servidor SMTP (usado por todos os grupos que ativarem e-mail)</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+            <input type="text" class="inp" id="smtpHost" placeholder="Servidor (ex: smtp.gmail.com)" onchange="updSmtp('host',this.value)" style="flex:2;min-width:180px">
+            <input type="number" class="inp" id="smtpPort" placeholder="Porta" onchange="updSmtp('port',+this.value)" style="flex:0 0 80px">
+            <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);white-space:nowrap">
+              <input type="checkbox" id="smtpSecure" onchange="updSmtp('secure',this.checked)"> SSL/TLS
+            </label>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+            <input type="text" class="inp" id="smtpUser" placeholder="Usuário" autocomplete="off" onchange="updSmtp('user',this.value)" style="flex:1;min-width:140px">
+            <input type="password" class="inp" id="smtpPass" placeholder="Senha" autocomplete="off" onchange="updSmtp('pass',this.value)" style="flex:1;min-width:140px">
+            <input type="email" class="inp" id="smtpFrom" placeholder="Remetente (opcional, padrão = usuário)" onchange="updSmtp('from',this.value)" style="flex:1;min-width:180px">
+          </div>
+          <div class="lbl" style="margin-bottom:6px">Bot do Telegram (um token só, usado por todos os grupos)</div>
+          <input type="text" class="inp" id="telegramToken" placeholder="Token do bot (via @BotFather)" autocomplete="off" onchange="updTelegramToken(this.value)" style="width:100%">
+          <div style="font-size:10px;color:var(--muted);margin-top:8px">Ative e escolha os destinatários/níveis de cada canal dentro de cada grupo, mais abaixo.</div>
+        </div>
+      </div>
       <div class="stn-list" id="stnList"></div>
     </div>
     <div class="modal-ft">
@@ -521,7 +548,9 @@ function defCfg() {
   return {
     theme: 'dark',
     interval: 5,
-    groups: []
+    groups: [],
+    smtp: { host: '', port: 587, secure: false, user: '', pass: '', from: '' },
+    telegramBotToken: ''
   };
 }
 
@@ -725,6 +754,12 @@ function stClass(s) { return s==='ok'?'ok':s==='wn'?'wn':'cr'; }
 
 /* ── RENDER HELPERS ── */
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') }
+// Data + hora pros alertas/eventos — sozinha a hora confunde num log que
+// acumula dias (até 200 eventos guardados).
+function fmtEventTs(ts) {
+  const d = new Date(ts);
+  return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR');
+}
 function n(v,d=1) { return v==null||isNaN(v) ? '—' : parseFloat(v).toFixed(d) }
 function pct(v,mx) { return v==null ? 0 : Math.min(100,Math.max(0,v/mx*100)) }
 
@@ -2235,54 +2270,100 @@ function renderGenSection(gen, gs, opts = {}) {
 
 const trashIcon = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>`;
 
+let cfgGenCollapsed = {};
+function toggleCfgGen(genId) {
+  cfgGenCollapsed[genId] = !(cfgGenCollapsed[genId] !== false);
+  const body = document.getElementById('genbodycfg-' + genId);
+  const chev = document.getElementById('genchevcfg-' + genId);
+  const open = cfgGenCollapsed[genId] === false;
+  if (body) body.style.display = open ? '' : 'none';
+  if (chev) chev.classList.toggle('open', open);
+}
+
 function genRowHtml(gen) {
-  return `<div class="gen-row" id="genrow-${gen.id}" style="flex-direction:column;align-items:stretch;gap:6px">
-    <div style="display:flex;gap:8px;align-items:center">
-      <input type="text" class="inp" placeholder="Nome do gerador" value="${esc(gen.name||'')}" onchange="updGenerator('${gen.id}','name',this.value)" style="flex:1;min-width:120px">
-      <input type="url" class="inp" placeholder="http://IP:8091/realtime.cgi?SID=... (opcional)" value="${esc(gen.url||'')}" onchange="updGenerator('${gen.id}','url',this.value)" style="flex:2;min-width:200px">
-      <button class="btn btn-ico btn-d" onclick="removeGen('${gen.id}')" title="Remover gerador">${trashIcon}</button>
+  const collapsed = cfgGenCollapsed[gen.id] !== false;
+  const summary = gen.url && gen.modbusHost ? 'JSON + Modbus' : gen.url ? 'JSON' : gen.modbusHost ? 'Modbus' : 'não configurado';
+  return `<div class="gen-row" id="genrow-${gen.id}" style="flex-direction:column;align-items:stretch;gap:0">
+    <div style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none" onclick="toggleCfgGen('${gen.id}')">
+      <svg id="genchevcfg-${gen.id}" class="grp-chev ${collapsed?'':'open'}" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0"><polyline points="6 9 12 15 18 9"/></svg>
+      <input type="text" class="inp" placeholder="Nome do gerador" value="${esc(gen.name||'')}" onchange="updGenerator('${gen.id}','name',this.value)" onclick="event.stopPropagation()" style="flex:1;min-width:120px">
+      <span style="font-size:10px;color:var(--muted);flex-shrink:0">${summary}</span>
+      <button class="btn btn-ico btn-d" onclick="event.stopPropagation();removeGen('${gen.id}')" title="Remover gerador">${trashIcon}</button>
     </div>
-    <div style="display:flex;gap:8px;align-items:center">
-      <input type="text" class="inp" placeholder="IP do gerador — só se não tiver URL JSON acima" title="Host Modbus: usado só quando não há URL JSON. Lê tudo (RPM, tensões, alarmes etc.) direto pela porta Modbus." value="${esc(gen.modbusHost||'')}" onchange="updGenerator('${gen.id}','modbusHost',this.value)" style="flex:2;min-width:160px">
-      <input type="number" class="inp" placeholder="502" title="Porta Modbus TCP (padrão 502)" value="${gen.modbusPort||''}" onchange="updGenerator('${gen.id}','modbusPort',this.value?+this.value:null)" style="flex:0 0 72px;min-width:72px">
-      <span style="font-size:10px;color:var(--muted);flex:1">${gen.url ? 'Modbus complementa os alertas' : (gen.modbusHost ? 'Modo Modbus puro (sem URL JSON)' : 'Preencha a URL ou o host Modbus acima')}</span>
+    <div id="genbodycfg-${gen.id}" style="display:${collapsed?'none':''};margin-top:6px;padding-left:18px">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+        <input type="url" class="inp" placeholder="http://IP:8091/realtime.cgi?SID=... (opcional)" value="${esc(gen.url||'')}" onchange="updGenerator('${gen.id}','url',this.value)" style="flex:1">
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="text" class="inp" placeholder="IP do gerador — só se não tiver URL JSON acima" title="Host Modbus: usado só quando não há URL JSON. Lê tudo (RPM, tensões, alarmes etc.) direto pela porta Modbus." value="${esc(gen.modbusHost||'')}" onchange="updGenerator('${gen.id}','modbusHost',this.value)" style="flex:2;min-width:160px">
+        <input type="number" class="inp" placeholder="502" title="Porta Modbus TCP (padrão 502)" value="${gen.modbusPort||''}" onchange="updGenerator('${gen.id}','modbusPort',this.value?+this.value:null)" style="flex:0 0 72px;min-width:72px">
+      </div>
+      <div style="font-size:10px;color:var(--muted);margin-top:4px">${gen.url ? 'Modbus complementa os alertas' : (gen.modbusHost ? 'Modo Modbus puro (sem URL JSON)' : 'Preencha a URL ou o host Modbus acima')}</div>
     </div>
   </div>`;
 }
 
 /* ── CONFIG UI ── */
+// Rádios e geradores recolhidos por padrão (só o essencial visível de cara) —
+// evita que um grupo com várias rádios vire uma parede de campos. Item recém
+// criado abre expandido (ver addStation/addGrpGen/addStnGen), os demais
+// começam fechados a cada abertura da tela.
+let cfgStnCollapsed = {};
+function toggleCfgStn(sId) {
+  cfgStnCollapsed[sId] = !(cfgStnCollapsed[sId] !== false);
+  const body = document.getElementById('stnbody-' + sId);
+  const chev = document.getElementById('stnchev-' + sId);
+  const open = cfgStnCollapsed[sId] === false;
+  if (body) body.style.display = open ? '' : 'none';
+  if (chev) chev.classList.toggle('open', open);
+}
+
 function stnRowHtml(s, gId) {
+  const collapsed = cfgStnCollapsed[s.id] !== false;
   const stnGens = (s.generators||[]).map(gen => genRowHtml(gen)).join('');
+  const stnGenCount = (s.generators||[]).length;
+  const extras = [
+    s.streamUrl ? 'streaming' : '',
+    s.authUser ? 'login' : '',
+    stnGenCount ? `${stnGenCount} gerador${stnGenCount!==1?'es':''}` : '',
+  ].filter(Boolean).join(' · ');
   return `<div class="stn-row" id="row-${s.id}">
-    <div class="stn-row-main">
-      <div><div class="lbl">Nome</div><input type="text" class="inp" value="${esc(s.name)}" onchange="updStn('${s.id}','name',this.value)"></div>
-      <div><div class="lbl">Tipo</div><select class="inp" onchange="updStn('${s.id}','txType',this.value)"><option value="standard" ${(s.txType||'standard')==='standard'?'selected':''}>Padrão</option><option value="bt" ${s.txType==='bt'?'selected':''}>BT APP10</option></select></div>
-      <div><div class="lbl">URL da Telemetria</div><input type="url" class="inp" value="${esc(s.url)}" onchange="updStn('${s.id}','url',this.value)"></div>
-      <div><div class="lbl">Intervalo (s)</div><input type="number" class="inp" value="${s.interval||cfg.interval}" min="2" max="120" onchange="updStn('${s.id}','interval',+this.value)" ${s.txType==='bt'?'disabled title="BT usa WebSocket contínuo"':''}></div>
-      <div style="padding-top:16px;display:flex;align-items:center;gap:6px">
-        <button class="tgl ${s.enabled?'on':''}" onclick="tglStn('${s.id}')"></button>
-        <span style="font-size:11px;color:var(--muted)">${s.enabled?'Ativo':'Pausado'}</span>
-      </div>
-      <button class="btn btn-ico" onclick="testStn('${s.id}')" title="Testar" style="margin-top:14px">
+    <div class="stn-row-hd" style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none" onclick="toggleCfgStn('${s.id}')">
+      <svg id="stnchev-${s.id}" class="grp-chev ${collapsed?'':'open'}" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0"><polyline points="6 9 12 15 18 9"/></svg>
+      <input type="text" class="inp" value="${esc(s.name)}" onchange="updStn('${s.id}','name',this.value)" onclick="event.stopPropagation()" style="flex:0 0 160px;font-weight:600">
+      <span class="pill ${s.enabled?'on':'off'}" style="font-size:9px;padding:2px 7px;flex-shrink:0">${s.enabled?'Ativo':'Pausado'}</span>
+      <span style="font-size:11px;color:var(--muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.url)||'sem URL configurada'}${extras?' · '+extras:''}</span>
+      <button class="btn btn-ico" onclick="event.stopPropagation();testStn('${s.id}')" title="Testar">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
       </button>
-      <button class="btn btn-ico btn-d" onclick="removeStn('${s.id}')" title="Remover" style="margin-top:14px">${trashIcon}</button>
+      <button class="btn btn-ico btn-d" onclick="event.stopPropagation();removeStn('${s.id}')" title="Remover">${trashIcon}</button>
     </div>
-    <div class="stn-row-stream">
-      <div class="lbl">URL Streaming (opcional)</div>
-      <input type="url" class="inp" placeholder="https://painel.sintonizar.tv.br:10106" value="${esc(s.streamUrl||'')}" onchange="updStn('${s.id}','streamUrl',this.value)">
-    </div>
-    <div class="stn-row-stream">
-      <div class="lbl">Login do transmissor (opcional — só se ele pedir usuário/senha)</div>
-      <div style="display:flex;gap:8px">
-        <input type="text" class="inp" placeholder="Usuário" autocomplete="off" value="${esc(s.authUser||'')}" onchange="updStn('${s.id}','authUser',this.value)" style="flex:1">
-        <input type="password" class="inp" placeholder="Senha" autocomplete="off" value="${esc(s.authPass||'')}" onchange="updStn('${s.id}','authPass',this.value)" style="flex:1">
+    <div id="stnbody-${s.id}" style="display:${collapsed?'none':''};margin-top:10px">
+      <div class="stn-row-main">
+        <div><div class="lbl">Tipo</div><select class="inp" onchange="updStn('${s.id}','txType',this.value)"><option value="standard" ${(s.txType||'standard')==='standard'?'selected':''}>Padrão</option><option value="bt" ${s.txType==='bt'?'selected':''}>BT APP10</option></select></div>
+        <div style="grid-column:span 2"><div class="lbl">URL da Telemetria</div><input type="url" class="inp" value="${esc(s.url)}" onchange="updStn('${s.id}','url',this.value)"></div>
+        <div><div class="lbl">Intervalo (s)</div><input type="number" class="inp" value="${s.interval||cfg.interval}" min="2" max="120" onchange="updStn('${s.id}','interval',+this.value)" ${s.txType==='bt'?'disabled title="BT usa WebSocket contínuo"':''}></div>
+        <div style="padding-top:16px;display:flex;align-items:center;gap:6px">
+          <button class="tgl ${s.enabled?'on':''}" onclick="tglStn('${s.id}')"></button>
+          <span style="font-size:11px;color:var(--muted)">${s.enabled?'Ativo':'Pausado'}</span>
+        </div>
       </div>
-    </div>
-    <div class="stn-row-gens">
-      <div class="lbl" style="margin-bottom:6px">Geradores exclusivos desta rádio</div>
-      ${stnGens || '<div style="font-size:11px;color:var(--muted);margin-bottom:4px">Nenhum gerador exclusivo.</div>'}
-      <button class="btn" style="margin-top:4px;font-size:11px" onclick="addStnGen('${s.id}')">+ Gerador</button>
+      <div class="stn-row-stream">
+        <div class="lbl">URL Streaming (opcional)</div>
+        <input type="url" class="inp" placeholder="https://painel.sintonizar.tv.br:10106" value="${esc(s.streamUrl||'')}" onchange="updStn('${s.id}','streamUrl',this.value)">
+      </div>
+      <div class="stn-row-stream">
+        <div class="lbl">Login do transmissor (opcional — só se ele pedir usuário/senha)</div>
+        <div style="display:flex;gap:8px">
+          <input type="text" class="inp" placeholder="Usuário" autocomplete="off" value="${esc(s.authUser||'')}" onchange="updStn('${s.id}','authUser',this.value)" style="flex:1">
+          <input type="password" class="inp" placeholder="Senha" autocomplete="off" value="${esc(s.authPass||'')}" onchange="updStn('${s.id}','authPass',this.value)" style="flex:1">
+        </div>
+      </div>
+      <div class="stn-row-gens">
+        <div class="lbl" style="margin-bottom:6px">Geradores exclusivos desta rádio</div>
+        ${stnGens || '<div style="font-size:11px;color:var(--muted);margin-bottom:4px">Nenhum gerador exclusivo.</div>'}
+        <button class="btn" style="margin-top:4px;font-size:11px" onclick="addStnGen('${s.id}')">+ Gerador</button>
+      </div>
     </div>
   </div>`;
 }
@@ -2297,10 +2378,131 @@ function toggleCfgGrp(gId) {
   if (chev) chev.classList.toggle('open', !cfgGrpCollapsed[gId]);
 }
 
+let notifyGlobalOpen = false;
+function toggleNotifyGlobalCfg() {
+  notifyGlobalOpen = !notifyGlobalOpen;
+  document.getElementById('notifyGlobalBody').style.display = notifyGlobalOpen ? '' : 'none';
+  document.getElementById('notifyGlobalChev').classList.toggle('open', notifyGlobalOpen);
+}
+function updSmtp(k, v) { if (!cfg.smtp) cfg.smtp = {}; cfg.smtp[k] = v; }
+function updTelegramToken(v) { cfg.telegramBotToken = v; }
+
+let notifyGrpOpen = {};
+function toggleNotifyGrp(gId) {
+  notifyGrpOpen[gId] = !notifyGrpOpen[gId];
+  const body = document.getElementById('notifygrpbody-' + gId);
+  const chev = document.getElementById('notifygrpchev-' + gId);
+  if (body) body.style.display = notifyGrpOpen[gId] ? '' : 'none';
+  if (chev) chev.classList.toggle('open', notifyGrpOpen[gId]);
+}
+
+const NOTIFY_LEVELS = [
+  { key: 'crit', label: 'Crítico' },
+  { key: 'high', label: 'Alto' },
+  { key: 'info', label: 'Informativo' },
+  { key: 'ok', label: 'Recuperação (voltou ao normal)' },
+];
+
+function updGroupNotify(gId, channel, k, v) {
+  const gr = cfg.groups.find(g => g.id === gId);
+  if (!gr) return;
+  ensureGroupNotify(gr)[channel][k] = v;
+}
+
+function toggleGroupNotifyLevel(gId, channel, level, checked) {
+  const gr = cfg.groups.find(g => g.id === gId);
+  if (!gr) return;
+  const n = ensureGroupNotify(gr)[channel];
+  const set = new Set(n.levels || []);
+  if (checked) set.add(level); else set.delete(level);
+  n.levels = [...set];
+}
+
+function toggleGroupNotifyEnabled(gId, channel) {
+  const gr = cfg.groups.find(g => g.id === gId);
+  if (!gr) return;
+  const n = ensureGroupNotify(gr)[channel];
+  n.enabled = !n.enabled;
+  renderStnList();
+}
+
+function groupNotifyHtml(gr) {
+  const n = ensureGroupNotify(gr);
+  const open = !!notifyGrpOpen[gr.id];
+  const levelsHtml = (channel) => NOTIFY_LEVELS.map(lv => `
+    <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted)">
+      <input type="checkbox" ${(n[channel].levels||[]).includes(lv.key)?'checked':''} onchange="toggleGroupNotifyLevel('${gr.id}','${channel}','${lv.key}',this.checked)"> ${lv.label}
+    </label>`).join('');
+  return `<div class="grp-cfg" style="margin-top:8px;background:var(--surf2)">
+    <div class="grp-cfg-hd" onclick="toggleNotifyGrp('${gr.id}')" style="cursor:pointer;user-select:none;padding:8px 10px">
+      <div style="display:flex;align-items:center;gap:8px;flex:1">
+        <span style="flex:1;font-size:12px;font-weight:600">🔔 Notificações deste grupo</span>
+      </div>
+      <svg id="notifygrpchev-${gr.id}" class="grp-chev ${open?'open':''}" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+    </div>
+    <div id="notifygrpbody-${gr.id}" style="display:${open?'':'none'};padding:8px 10px">
+      <div style="margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <button class="tgl ${n.email.enabled?'on':''}" onclick="toggleGroupNotifyEnabled('${gr.id}','email')"></button>
+          <span style="font-size:12px;font-weight:600">E-mail</span>
+        </div>
+        <input type="text" class="inp" placeholder="Destinatários, separados por vírgula" value="${esc(n.email.recipients||'')}" onchange="updGroupNotify('${gr.id}','email','recipients',this.value)" style="width:100%;margin-bottom:6px">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px">${levelsHtml('email')}</div>
+        <button class="btn" style="font-size:11px" onclick="testGroupNotify('${gr.id}','email')">Testar</button>
+      </div>
+      <div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <button class="tgl ${n.telegram.enabled?'on':''}" onclick="toggleGroupNotifyEnabled('${gr.id}','telegram')"></button>
+          <span style="font-size:12px;font-weight:600">Telegram</span>
+        </div>
+        <input type="text" class="inp" placeholder="Chat ID" autocomplete="off" value="${esc(n.telegram.chatId||'')}" onchange="updGroupNotify('${gr.id}','telegram','chatId',this.value)" style="width:100%;margin-bottom:6px">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px">${levelsHtml('telegram')}</div>
+        <button class="btn" style="font-size:11px" onclick="testGroupNotify('${gr.id}','telegram')">Testar</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function testGroupNotify(gId, channel) {
+  const gr = cfg.groups.find(g => g.id === gId);
+  if (!gr) return;
+  const n = ensureGroupNotify(gr)[channel];
+  const testMsg = `Teste do PlayMonitor — grupo "${gr.name}"`;
+  if (channel === 'email') {
+    const recipients = (n.recipients||'').split(',').map(s=>s.trim()).filter(Boolean);
+    if (!recipients.length) { alert('Preencha os destinatários de e-mail primeiro.'); return; }
+    if (!cfg.smtp?.host) { alert('Configure o servidor SMTP primeiro (acima, em Notificações).'); return; }
+    const res = await window.notifyAPI.sendEmail({ smtp: cfg.smtp, to: recipients, subject: testMsg, text: 'Se você recebeu isso, o e-mail deste grupo está funcionando.' });
+    alert(res.success ? 'E-mail de teste enviado.' : 'Falha: ' + res.error);
+  } else {
+    if (!n.chatId) { alert('Preencha o Chat ID do Telegram primeiro.'); return; }
+    if (!cfg.telegramBotToken) { alert('Configure o token do bot primeiro (acima, em Notificações).'); return; }
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${cfg.telegramBotToken}/sendMessage`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: n.chatId, text: testMsg + '\nSe você recebeu isso, o Telegram deste grupo está funcionando.' }),
+      });
+      const body = await res.json();
+      alert(res.ok ? 'Mensagem de teste enviada.' : 'Falha: ' + (body.description || res.status));
+    } catch(e) { alert('Falha: ' + e.message); }
+  }
+}
+
+function renderNotifyGlobalFields() {
+  document.getElementById('smtpHost').value = cfg.smtp?.host || '';
+  document.getElementById('smtpPort').value = cfg.smtp?.port || 587;
+  document.getElementById('smtpSecure').checked = !!cfg.smtp?.secure;
+  document.getElementById('smtpUser').value = cfg.smtp?.user || '';
+  document.getElementById('smtpPass').value = cfg.smtp?.pass || '';
+  document.getElementById('smtpFrom').value = cfg.smtp?.from || '';
+  document.getElementById('telegramToken').value = cfg.telegramBotToken || '';
+}
+
 function renderStnList() {
   const el = document.getElementById('stnList');
   if (!el) return;
   document.getElementById('gInterval').value = cfg.interval;
+  renderNotifyGlobalFields();
   el.innerHTML = cfg.groups.map(gr => {
     const grpGens = (gr.generators||[]).map(gen => genRowHtml(gen)).join('');
     const collapsed = !!cfgGrpCollapsed[gr.id];
@@ -2325,6 +2527,7 @@ function renderStnList() {
         </div>
         <div class="grp-cfg-stns">${gr.stations.map(s => stnRowHtml(s, gr.id)).join('') || '<div style="font-size:12px;color:var(--muted);padding:4px 0">Nenhuma rádio neste grupo.</div>'}</div>
         <div class="grp-cfg-foot"><button class="btn btn-p" onclick="addStation('${gr.id}')">+ Rádio</button></div>
+        ${groupNotifyHtml(gr)}
       </div>
     </div>`;
   }).join('');
@@ -2338,7 +2541,9 @@ function addGroup() {
 function addGrpGen(gId) {
   const gr = cfg.groups.find(g=>g.id===gId); if(!gr) return;
   gr.generators = gr.generators||[];
-  gr.generators.push({ id:uid(), name:`Gerador ${gr.generators.length+1}`, url:'' });
+  const newId = uid();
+  gr.generators.push({ id:newId, name:`Gerador ${gr.generators.length+1}`, url:'' });
+  cfgGenCollapsed[newId] = false;
   renderStnList();
 }
 
@@ -2346,7 +2551,9 @@ function addStnGen(sId) {
   let s; for (const gr of cfg.groups) { s=gr.stations.find(s=>s.id===sId); if(s) break; }
   if(!s) return;
   s.generators = s.generators||[];
-  s.generators.push({ id:uid(), name:`Gerador ${s.generators.length+1}`, url:'' });
+  const newId = uid();
+  s.generators.push({ id:newId, name:`Gerador ${s.generators.length+1}`, url:'' });
+  cfgGenCollapsed[newId] = false;
   renderStnList();
 }
 
@@ -2387,7 +2594,9 @@ function removeGroup(gId) {
 
 function addStation(gId) {
   const gr = cfg.groups.find(g=>g.id===gId); if(!gr) return;
-  gr.stations.push({ id:uid(), name:`Rádio ${gr.stations.length+1}`, url:'http://IP:56000/readTELEMETRY', streamUrl:'', generators:[], interval:cfg.interval, enabled:true });
+  const newId = uid();
+  gr.stations.push({ id:newId, name:`Rádio ${gr.stations.length+1}`, url:'http://IP:56000/readTELEMETRY', streamUrl:'', generators:[], interval:cfg.interval, enabled:true });
+  cfgStnCollapsed[newId] = false;
   renderStnList();
 }
 
@@ -2561,6 +2770,64 @@ function addEvent(genId, genName, icon, level, condKey, msg, detail) {
   updateBell();
   renderAlertBanner();
   if (document.getElementById('alertLogModal')?.classList.contains('open')) renderAlertLogBody();
+  notifyGroupOfEvent(genId, level, msg, detail);
+}
+
+/* ── Notificações por e-mail (SMTP) e Telegram, por grupo/local ── */
+// `genId` aqui é o mesmo id usado no resto do app pra identificar tanto
+// rádios quanto geradores — localiza a que grupo ele pertence (direto ou via
+// uma rádio) pra saber quem quer ser avisado e de que jeito.
+function getNotifyGroupFor(id) {
+  for (const gr of cfg.groups) {
+    if ((gr.stations||[]).some(s => s.id === id)) return gr;
+    if ((gr.generators||[]).some(g => g.id === id)) return gr;
+    for (const s of gr.stations||[]) {
+      if ((s.generators||[]).some(g => g.id === id)) return gr;
+    }
+  }
+  return null;
+}
+
+function ensureGroupNotify(gr) {
+  if (!gr.notify) gr.notify = {};
+  if (!gr.notify.email) gr.notify.email = { enabled: false, recipients: '', levels: ['crit','high'] };
+  if (!gr.notify.telegram) gr.notify.telegram = { enabled: false, chatId: '', levels: ['crit','high'] };
+  return gr.notify;
+}
+
+async function sendTelegramAlert(chatId, text) {
+  if (!cfg.telegramBotToken || !chatId) return;
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${cfg.telegramBotToken}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text }),
+    });
+    if (!res.ok) console.error('[telegram] falha ao enviar:', await res.text());
+  } catch(e) { console.error('[telegram] falha ao enviar:', e.message); }
+}
+
+async function sendEmailAlert(recipients, subject, text) {
+  if (!window.notifyAPI || !cfg.smtp?.host || !recipients.length) return;
+  try {
+    const res = await window.notifyAPI.sendEmail({ smtp: cfg.smtp, to: recipients, subject, text });
+    if (!res.success) console.error('[email] falha ao enviar:', res.error);
+  } catch(e) { console.error('[email] falha ao enviar:', e.message); }
+}
+
+function notifyGroupOfEvent(genId, level, msg, detail) {
+  const gr = getNotifyGroupFor(genId);
+  if (!gr) return;
+  const notify = ensureGroupNotify(gr);
+  const text = detail ? `${msg}\n${detail}` : msg;
+
+  if (notify.email.enabled && (notify.email.levels||[]).includes(level)) {
+    const recipients = (notify.email.recipients||'').split(',').map(s=>s.trim()).filter(Boolean);
+    if (recipients.length) sendEmailAlert(recipients, msg, text);
+  }
+  if (notify.telegram.enabled && (notify.telegram.levels||[]).includes(level) && notify.telegram.chatId) {
+    sendTelegramAlert(notify.telegram.chatId, text);
+  }
 }
 
 function updateBell() {
@@ -2592,7 +2859,7 @@ function renderAlertBanner() {
           <div class="al-strip-msg">${esc(ev.msg)}</div>
           ${ev.detail ? `<div class="al-strip-det">${esc(ev.detail)}</div>` : ''}
         </div>
-        <span class="al-strip-ts">${new Date(ev.ts).toLocaleTimeString('pt-BR')}</span>
+        <span class="al-strip-ts">${fmtEventTs(ev.ts)}</span>
         <button class="al-strip-x" onclick="dismissBannerItem('${genId}','${condKey}')" title="Dispensar">×</button>
       </div>`);
     }
@@ -2618,7 +2885,7 @@ function renderAlertLogBody() {
       <div class="al-log-msg">${esc(ev.msg)}</div>
       ${ev.detail ? `<div class="al-log-det">${esc(ev.detail)}</div>` : ''}
     </div>
-    <span class="al-log-ts">${new Date(ev.ts).toLocaleTimeString('pt-BR')}</span>
+    <span class="al-log-ts">${fmtEventTs(ev.ts)}</span>
   </div>`).join('');
 }
 

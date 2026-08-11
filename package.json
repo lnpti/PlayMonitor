@@ -1,6 +1,6 @@
 {
   "name": "playmonitor",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "PlayMonitor — Monitoramento de transmissores FM, geradores e streaming",
   "main": "main.js",
   "scripts": {
@@ -50,6 +50,7 @@
     }
   },
   "dependencies": {
-    "electron-updater": "^6.8.9"
+    "electron-updater": "^6.8.9",
+    "nodemailer": "^9.0.5"
   }
 }

@@ -2,8 +2,35 @@ const { app, BrowserWindow, Menu, shell, globalShortcut, ipcMain, dialog } = req
 const path = require('path');
 const net = require('net');
 const { autoUpdater } = require('electron-updater');
+const nodemailer = require('nodemailer');
 
 let mainWindow = null;
+
+// ── Alertas por e-mail (SMTP) ──
+// Envio via main process porque SMTP não é HTTP — a tela não consegue fazer
+// isso sozinha por fetch(). O servidor/credenciais vêm da própria tela
+// (configurados pelo usuário), nunca ficam hardcoded aqui.
+ipcMain.handle('send-email', async (event, { smtp, to, subject, text }) => {
+  if (!smtp || !smtp.host) return { success: false, error: 'SMTP não configurado' };
+  if (!Array.isArray(to) || !to.length) return { success: false, error: 'sem destinatários' };
+  try {
+    const transporter = nodemailer.createTransport({
+      host: smtp.host,
+      port: Number(smtp.port) || 587,
+      secure: !!smtp.secure,
+      auth: smtp.user ? { user: smtp.user, pass: smtp.pass || '' } : undefined,
+    });
+    await transporter.sendMail({
+      from: smtp.from || smtp.user,
+      to: to.join(','),
+      subject,
+      text,
+    });
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e.message || String(e) };
+  }
+});
 
 // ── MODBUS TCP (Página 8 do GenComm — Condições de Alarme) ──
 // Unit ID 0 confirmado por teste real contra um DSE855/6120 MKIII (unit id
