@@ -348,6 +348,23 @@ body.dragging-group *{cursor:grabbing!important}
 .alert-banner{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
 .al-strip{display:flex;align-items:flex-start;gap:10px;padding:10px 13px;border-radius:var(--rs);font-size:12px;line-height:1.4;box-shadow:var(--shadow);animation:al-in .2s ease}
 @keyframes al-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+.chart-card{background:var(--surf2);border:1px solid var(--bdr);border-radius:var(--rs);padding:12px 14px 8px;margin:10px 0}
+.chart-card-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:6px}
+.chart-svg{width:100%;height:auto;display:block;overflow:visible}
+.chart-svg .grid-line{stroke:var(--bdr);stroke-width:1}
+.chart-svg .axis-lbl{fill:var(--muted);font-size:8.5px;font-family:inherit;font-variant-numeric:tabular-nums}
+.chart-svg .end-lbl{fill:var(--txt);font-size:9.5px;font-weight:700;font-family:inherit}
+.chart-svg .crosshair{stroke:var(--muted);stroke-width:1;pointer-events:none;opacity:0;transition:opacity .1s}
+.chart-hover-overlay{fill:transparent;cursor:crosshair}
+.chart-legend{display:flex;flex-wrap:wrap;gap:10px 14px;margin-top:6px;padding-top:6px;border-top:1px solid var(--bdr)}
+.chart-legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--txt)}
+.chart-legend-key{width:12px;height:2px;border-radius:1px;flex-shrink:0}
+.chart-tooltip{position:absolute;pointer-events:none;background:var(--surf);border:1px solid var(--bdr2);border-radius:6px;box-shadow:var(--shadow);padding:6px 9px;font-size:11px;z-index:20;opacity:0;transition:opacity .1s;min-width:120px}
+.chart-tooltip-date{font-size:10px;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.03em}
+.chart-tooltip-row{display:flex;align-items:center;gap:10px;justify-content:space-between}
+.chart-tooltip-key{display:flex;align-items:center;gap:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}
+.chart-tooltip-dash{width:9px;height:2px;flex-shrink:0}
+.chart-tooltip-val{font-weight:800;color:var(--num);font-variant-numeric:tabular-nums;flex-shrink:0}
 .al-strip-crit{background:var(--crit-bg);border:1px solid color-mix(in srgb, var(--crit) 40%, transparent);border-left:3px solid var(--crit)}
 .al-strip-high{background:var(--warn-bg);border:1px solid color-mix(in srgb, var(--warn) 40%, transparent);border-left:3px solid var(--warn)}
 .al-strip-info{background:var(--accent-dim);border:1px solid color-mix(in srgb, var(--accent) 40%, transparent);border-left:3px solid var(--accent)}
@@ -487,7 +504,7 @@ body.dragging-group *{cursor:grabbing!important}
 
 <!-- Listener History Report Modal -->
 <div id="listenerReportModal" class="modal-overlay" onclick="if(event.target===this)closeListenerReport()">
-  <div class="modal" style="max-width:640px">
+  <div class="modal" style="max-width:740px">
     <div class="modal-hd">
       <span class="modal-hd-title">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
@@ -506,7 +523,17 @@ body.dragging-group *{cursor:grabbing!important}
           <button type="button" class="density-btn" id="lrTabMonthly" onclick="setListenerReportMode('monthly')">Mensal</button>
         </div>
       </div>
-      <div id="listenerReportBody" style="overflow-y:auto"></div>
+      <div style="overflow-y:auto">
+        <div class="chart-card">
+          <div class="chart-card-title">Todas as rádios</div>
+          <div id="lrChartAll"></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-card-title" id="lrChartStnTitle">Rádio selecionada</div>
+          <div id="lrChartStn"></div>
+        </div>
+        <div id="listenerReportBody"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -722,6 +749,190 @@ function allListenerStations() {
   return out;
 }
 
+/* ── GRÁFICOS DO RELATÓRIO DE OUVINTES (SVG, sem libs externas) ──
+   Paleta categórica validada (dataviz skill, checks CVD/contraste ok para
+   os fundos claro #FFFFFF e escuro #0B1622 deste app). */
+const CHART_CAT_LIGHT = ['#2a78d6','#eb6834','#1baf7a','#eda100','#e87ba4','#008300','#4a3aa7','#e34948'];
+const CHART_CAT_DARK  = ['#3987e5','#d95926','#199e70','#c98500','#d55181','#008300','#9085e9','#e66767'];
+function chartCatColor(i) { return (cfg.theme === 'dark' ? CHART_CAT_DARK : CHART_CAT_LIGHT)[i % 8]; }
+const CHART_MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+function chartKeyLabelFull(key, mode) {
+  if (mode === 'daily') return key.split('-').reverse().join('/');
+  const [y, mo] = key.split('-');
+  return `${CHART_MESES[+mo-1]}/${y}`;
+}
+function chartKeyLabelShort(key, mode) {
+  if (mode === 'daily') return key.slice(8) + '/' + key.slice(5,7);
+  const [y, mo] = key.split('-');
+  return `${CHART_MESES[+mo-1]}/${y.slice(2)}`;
+}
+function stationMonthMap(stnId) {
+  const hist = listenerHistory[stnId] || {};
+  const months = {};
+  for (const day in hist) {
+    const m = day.slice(0, 7);
+    const r = hist[day];
+    if (!months[m]) months[m] = { peak: 0, sum: 0, count: 0 };
+    months[m].peak = Math.max(months[m].peak, r.peak);
+    months[m].sum += r.sum;
+    months[m].count += r.count;
+  }
+  return months;
+}
+function combinedListenerSeries(mode) {
+  const stations = allListenerStations().filter(s => listenerHistory[s.id] && Object.keys(listenerHistory[s.id]).length);
+  const ranked = stations.map(s => {
+    const map = mode === 'daily' ? listenerHistory[s.id] : stationMonthMap(s.id);
+    const maxPeak = Math.max(0, ...Object.values(map).map(r => r.peak));
+    return { id: s.id, name: s.name, maxPeak };
+  }).sort((a, b) => b.maxPeak - a.maxPeak);
+  const shown = ranked.slice(0, 8);
+  const limit = mode === 'daily' ? 30 : 12;
+  const keySet = new Set();
+  shown.forEach(s => {
+    const map = mode === 'daily' ? (listenerHistory[s.id] || {}) : stationMonthMap(s.id);
+    Object.keys(map).forEach(k => keySet.add(k));
+  });
+  const keys = [...keySet].sort().slice(-limit);
+  const series = shown.map((s, i) => {
+    const map = mode === 'daily' ? (listenerHistory[s.id] || {}) : stationMonthMap(s.id);
+    return { name: s.name, color: chartCatColor(i), values: keys.map(k => map[k] ? map[k].peak : null) };
+  });
+  return { keys, series, omitted: ranked.length - shown.length, total: ranked.length };
+}
+function individualListenerSeries(stnId, mode) {
+  const limit = mode === 'daily' ? 30 : 12;
+  const map = mode === 'daily' ? (listenerHistory[stnId] || {}) : stationMonthMap(stnId);
+  const keys = Object.keys(map).sort().slice(-limit);
+  return {
+    keys,
+    series: [
+      { name: 'Pico', color: 'var(--num)', values: keys.map(k => map[k].peak) },
+      { name: 'Média', color: 'var(--muted)', values: keys.map(k => map[k].count ? Math.round(map[k].sum / map[k].count) : 0) },
+    ],
+  };
+}
+function renderTrendChart(container, keys, series, opts) {
+  opts = opts || {};
+  const mode = opts.mode || 'daily';
+  if (!container) return;
+  if (!keys.length || !series.some(s => s.values.some(v => v != null))) {
+    container.innerHTML = `<div class="al-empty">${esc(opts.emptyMsg || 'Ainda sem dados suficientes para o gráfico.')}</div>`;
+    return;
+  }
+  const W = 640, H = opts.height || 190;
+  const showEndLbl = opts.endLabels !== false && series.length > 0 && series.length <= 4;
+  const padL = 32, padR = showEndLbl ? 62 : 10, padT = 10, padB = 22;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  let maxV = 0;
+  series.forEach(s => s.values.forEach(v => { if (v != null && v > maxV) maxV = v; }));
+  if (maxV <= 0) maxV = 1;
+  const p = Math.pow(10, Math.floor(Math.log10(maxV)));
+  maxV = Math.ceil(maxV / (p / 2)) * (p / 2) || 1;
+  const n = keys.length;
+  const xStep = n > 1 ? plotW / (n - 1) : 0;
+  const xAt = i => padL + xStep * i;
+  const yAt = v => padT + plotH - (v / maxV) * plotH;
+
+  const gridN = 4;
+  let gridSvg = '', axisLblSvg = '';
+  for (let g = 0; g <= gridN; g++) {
+    const v = maxV * g / gridN;
+    const y = yAt(v);
+    gridSvg += `<line class="grid-line" x1="${padL}" y1="${y.toFixed(1)}" x2="${W-padR}" y2="${y.toFixed(1)}"/>`;
+    axisLblSvg += `<text class="axis-lbl" x="${padL-5}" y="${(y+3).toFixed(1)}" text-anchor="end">${Math.round(v)}</text>`;
+  }
+  const tickCount = Math.min(n, 6);
+  let xLblSvg = '';
+  if (n === 1) {
+    xLblSvg = `<text class="axis-lbl" x="${xAt(0).toFixed(1)}" y="${H-4}" text-anchor="middle">${esc(chartKeyLabelShort(keys[0], mode))}</text>`;
+  } else {
+    for (let t = 0; t < tickCount; t++) {
+      const idx = Math.round(t * (n - 1) / (tickCount - 1));
+      xLblSvg += `<text class="axis-lbl" x="${xAt(idx).toFixed(1)}" y="${H-4}" text-anchor="middle">${esc(chartKeyLabelShort(keys[idx], mode))}</text>`;
+    }
+  }
+
+  let pathsSvg = '', dotsSvg = '', endLblSvg = '';
+  series.forEach(s => {
+    let d = '', open = false, lastIdx = -1;
+    s.values.forEach((v, i) => {
+      if (v == null) { open = false; return; }
+      const x = xAt(i), y = yAt(v);
+      d += (open ? 'L' : 'M') + x.toFixed(1) + ',' + y.toFixed(1) + ' ';
+      open = true;
+      lastIdx = i;
+    });
+    if (d) pathsSvg += `<path d="${d.trim()}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    if (lastIdx >= 0) {
+      const x = xAt(lastIdx), y = yAt(s.values[lastIdx]);
+      dotsSvg += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4" fill="${s.color}" stroke="var(--surf2)" stroke-width="2"/>`;
+      if (showEndLbl) endLblSvg += `<text class="end-lbl" x="${(x+8).toFixed(1)}" y="${(y+3.5).toFixed(1)}">${esc(s.name)}</text>`;
+    }
+  });
+  const hoverDotsSvg = series.map((s, si) => `<circle class="hv-dot hv-dot-${si}" r="4.5" fill="${s.color}" stroke="var(--surf2)" stroke-width="2" opacity="0"/>`).join('');
+
+  const chartId = 'ch' + Math.random().toString(36).slice(2, 9);
+  const legendHtml = (series.length >= 2 || opts.forceLegend) ? `<div class="chart-legend">${series.map(s => `<div class="chart-legend-item"><span class="chart-legend-key" style="background:${s.color}"></span>${esc(s.name)}</div>`).join('')}</div>` : '';
+
+  container.innerHTML = `<div class="chart-wrap" id="${chartId}" style="position:relative">
+    <svg class="chart-svg" viewBox="0 0 ${W} ${H}">
+      ${gridSvg}${axisLblSvg}${xLblSvg}${pathsSvg}${dotsSvg}${endLblSvg}
+      <line class="crosshair" x1="0" y1="${padT}" x2="0" y2="${padT+plotH}"/>
+      ${hoverDotsSvg}
+      <rect class="chart-hover-overlay" x="${padL}" y="${padT}" width="${plotW}" height="${plotH}"/>
+    </svg>
+    <div class="chart-tooltip"></div>
+  </div>${legendHtml}`;
+
+  wireChartHover(container.querySelector('#' + chartId), { keys, series, mode, padL, plotW, n, xAt, yAt });
+}
+function wireChartHover(wrapEl, geo) {
+  if (!wrapEl) return;
+  const svg = wrapEl.querySelector('svg');
+  const crosshair = wrapEl.querySelector('.crosshair');
+  const tooltip = wrapEl.querySelector('.chart-tooltip');
+  const { keys, series, mode, padL, plotW, n, xAt, yAt } = geo;
+  function nearestIdx(clientX) {
+    const rect = svg.getBoundingClientRect();
+    const vb = svg.viewBox.baseVal;
+    const scaleX = vb.width / rect.width;
+    const xUser = (clientX - rect.left) * scaleX;
+    const rel = plotW ? (xUser - padL) / plotW : 0;
+    return Math.max(0, Math.min(n - 1, Math.round(rel * (n - 1))));
+  }
+  function show(clientX, clientY) {
+    const idx = nearestIdx(clientX);
+    const x = xAt(idx);
+    crosshair.setAttribute('x1', x); crosshair.setAttribute('x2', x); crosshair.style.opacity = 1;
+    let rows = '';
+    series.forEach((s, si) => {
+      const dot = wrapEl.querySelector('.hv-dot-' + si);
+      const v = s.values[idx];
+      if (dot) {
+        if (v == null) dot.style.opacity = 0;
+        else { dot.setAttribute('cx', x); dot.setAttribute('cy', yAt(v)); dot.style.opacity = 1; }
+      }
+      rows += `<div class="chart-tooltip-row"><span class="chart-tooltip-key"><span class="chart-tooltip-dash" style="background:${s.color}"></span>${esc(s.name)}</span><span class="chart-tooltip-val">${v == null ? '—' : v}</span></div>`;
+    });
+    tooltip.innerHTML = `<div class="chart-tooltip-date">${esc(chartKeyLabelFull(keys[idx], mode))}</div>${rows}`;
+    tooltip.style.opacity = 1;
+    const wrapRect = wrapEl.getBoundingClientRect();
+    let left = clientX - wrapRect.left + 14;
+    if (left + 170 > wrapRect.width) left = clientX - wrapRect.left - 170 - 14;
+    let top = clientY - wrapRect.top - 10;
+    tooltip.style.left = Math.max(4, left) + 'px';
+    tooltip.style.top = Math.max(4, top) + 'px';
+  }
+  function hide() {
+    crosshair.style.opacity = 0;
+    tooltip.style.opacity = 0;
+    series.forEach((s, si) => { const dot = wrapEl.querySelector('.hv-dot-' + si); if (dot) dot.style.opacity = 0; });
+  }
+  svg.addEventListener('mousemove', e => show(e.clientX, e.clientY));
+  svg.addEventListener('mouseleave', hide);
+}
+
 let listenerReportMode = 'daily';
 function setListenerReportMode(mode) {
   listenerReportMode = mode;
@@ -753,6 +964,27 @@ function renderListenerReportBody() {
   const body = document.getElementById('listenerReportBody');
   if (!body) return;
   const stnId = document.getElementById('lrStnSelect')?.value;
+  const modeLabel = listenerReportMode === 'daily' ? 'diário' : 'mensal';
+
+  const allChartEl = document.getElementById('lrChartAll');
+  if (allChartEl) {
+    const { keys, series, omitted, total } = combinedListenerSeries(listenerReportMode);
+    renderTrendChart(allChartEl, keys, series, { mode: listenerReportMode, forceLegend: true, endLabels: false, emptyMsg: 'Ainda sem dados suficientes para o gráfico.' });
+    const titleEl = allChartEl.parentElement.querySelector('.chart-card-title');
+    if (titleEl) titleEl.textContent = `Todas as rádios — pico ${modeLabel}` + (omitted > 0 ? ` (8 de ${total} rádios com mais ouvintes)` : '');
+  }
+  const stnChartEl = document.getElementById('lrChartStn');
+  const stnChartTitle = document.getElementById('lrChartStnTitle');
+  const stnInfo = allListenerStations().find(x => x.id === stnId);
+  if (stnChartTitle) stnChartTitle.textContent = stnInfo ? `${stnInfo.name} — pico e média ${modeLabel}` : 'Rádio selecionada';
+  if (stnChartEl) {
+    if (!stnId) { stnChartEl.innerHTML = ''; }
+    else {
+      const { keys, series } = individualListenerSeries(stnId, listenerReportMode);
+      renderTrendChart(stnChartEl, keys, series, { mode: listenerReportMode, emptyMsg: 'Ainda sem dados suficientes — o histórico começa a ser guardado a partir de agora, com a rádio online.' });
+    }
+  }
+
   if (!stnId) { body.innerHTML = `<div class="al-empty">Nenhuma rádio com streaming configurado.</div>`; return; }
   const rows = listenerReportMode === 'daily' ? listenerDailyRows(stnId, 60) : listenerMonthlyRows(stnId);
   if (!rows.length) { body.innerHTML = `<div class="al-empty">Ainda sem dados suficientes — o histórico começa a ser guardado a partir de agora, com a rádio online.</div>`; return; }
