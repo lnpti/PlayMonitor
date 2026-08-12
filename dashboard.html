@@ -7,33 +7,37 @@
 <link rel="icon" type="image/png" href="PlayMonitor.png">
 <style>
 :root {
-  --bg:#060E1A;--surf:#0C1928;--surf2:#142236;--bdr:#1C304A;--bdr2:#2A4A6A;
-  --txt:#B8D0E8;--muted:#4A6882;--accent:#00BCFF;--accent-dim:rgba(0,188,255,0.12);
-  --good:#00DC78;--good-bg:rgba(0,220,120,0.12);
-  --warn:#FFBB00;--warn-bg:rgba(255,187,0,0.12);
-  --crit:#FF3E5E;--crit-bg:rgba(255,62,94,0.14);
-  --num:#7ACEFF;--r:8px;--rs:4px;
-}
-@media(prefers-color-scheme:light){:root{
   --bg:#ECF1F8;--surf:#FFF;--surf2:#F5F8FC;--bdr:#C4D4E4;--bdr2:#94B0C8;
-  --txt:#142236;--muted:#5A7890;--accent:#006ECC;--accent-dim:rgba(0,110,204,0.1);
-  --good:#008840;--good-bg:rgba(0,136,64,0.1);
-  --warn:#995500;--warn-bg:rgba(153,85,0,0.1);
-  --crit:#CC1130;--crit-bg:rgba(204,17,48,0.1);--num:#004A99;
+  --txt:#142236;--muted:#54708C;--accent:#0077B8;--accent-dim:rgba(0,119,184,0.09);
+  --good:#0A8A4C;--good-bg:rgba(10,138,76,0.09);
+  --warn:#96650A;--warn-bg:rgba(150,101,10,0.09);
+  --crit:#C22147;--crit-bg:rgba(194,33,71,0.09);
+  --num:#005A99;--r:10px;--rs:7px;
+  --shadow:0 1px 2px rgba(20,34,58,.06),0 8px 20px -12px rgba(20,34,58,.14);
+}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#050A12;--surf:#0B1622;--surf2:#101D2C;--bdr:#1C3049;--bdr2:#2A4A6A;
+  --txt:#C7D9EE;--muted:#7691AE;--accent:#2FC4FF;--accent-dim:rgba(47,196,255,0.12);
+  --good:#22D68A;--good-bg:rgba(34,214,138,0.12);
+  --warn:#FFBF3F;--warn-bg:rgba(255,191,63,0.12);
+  --crit:#FF5577;--crit-bg:rgba(255,85,119,0.13);--num:#7FD4FF;
+  --shadow:0 1px 2px rgba(0,0,0,.35),0 12px 28px -14px rgba(0,0,0,.6);
 }}
 :root[data-theme="dark"]{
-  --bg:#060E1A;--surf:#0C1928;--surf2:#142236;--bdr:#1C304A;--bdr2:#2A4A6A;
-  --txt:#B8D0E8;--muted:#4A6882;--accent:#00BCFF;--accent-dim:rgba(0,188,255,0.12);
-  --good:#00DC78;--good-bg:rgba(0,220,120,0.12);
-  --warn:#FFBB00;--warn-bg:rgba(255,187,0,0.12);
-  --crit:#FF3E5E;--crit-bg:rgba(255,62,94,0.14);--num:#7ACEFF;
+  --bg:#050A12;--surf:#0B1622;--surf2:#101D2C;--bdr:#1C3049;--bdr2:#2A4A6A;
+  --txt:#C7D9EE;--muted:#7691AE;--accent:#2FC4FF;--accent-dim:rgba(47,196,255,0.12);
+  --good:#22D68A;--good-bg:rgba(34,214,138,0.12);
+  --warn:#FFBF3F;--warn-bg:rgba(255,191,63,0.12);
+  --crit:#FF5577;--crit-bg:rgba(255,85,119,0.13);--num:#7FD4FF;
+  --shadow:0 1px 2px rgba(0,0,0,.35),0 12px 28px -14px rgba(0,0,0,.6);
 }
 :root[data-theme="light"]{
   --bg:#ECF1F8;--surf:#FFF;--surf2:#F5F8FC;--bdr:#C4D4E4;--bdr2:#94B0C8;
-  --txt:#142236;--muted:#5A7890;--accent:#006ECC;--accent-dim:rgba(0,110,204,0.1);
-  --good:#008840;--good-bg:rgba(0,136,64,0.1);
-  --warn:#995500;--warn-bg:rgba(153,85,0,0.1);
-  --crit:#CC1130;--crit-bg:rgba(204,17,48,0.1);--num:#004A99;
+  --txt:#142236;--muted:#54708C;--accent:#0077B8;--accent-dim:rgba(0,119,184,0.09);
+  --good:#0A8A4C;--good-bg:rgba(10,138,76,0.09);
+  --warn:#96650A;--warn-bg:rgba(150,101,10,0.09);
+  --crit:#C22147;--crit-bg:rgba(194,33,71,0.09);
+  --num:#005A99;--shadow:0 1px 2px rgba(20,34,58,.06),0 8px 20px -12px rgba(20,34,58,.14);
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,'Segoe UI',Arial,sans-serif;font-size:13px;line-height:1.5;min-height:100vh}
@@ -120,11 +124,13 @@ body.dragging-group *{cursor:grabbing!important}
 /* card head */
 .c-head{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--bdr);background:var(--surf2);gap:8px;cursor:pointer;user-select:none}
 .c-head-l{display:flex;align-items:center;gap:9px}
-.dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-.dot-ok{background:var(--good);box-shadow:0 0 6px var(--good);animation:pgood 2s infinite}
+.dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;position:relative}
+.dot-ok{background:var(--good);box-shadow:0 0 6px var(--good)}
+.dot-ok::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:1.5px solid var(--good);opacity:.55;animation:pulse-ring 2.2s ease-out infinite}
 .dot-err{background:var(--crit);box-shadow:0 0 6px var(--crit);animation:pbad 1s infinite}
 .dot-ld{background:var(--warn);box-shadow:0 0 6px var(--warn);animation:pwarn 1s infinite}
-@keyframes pgood{0%,100%{opacity:1}50%{opacity:.55}}
+@keyframes pulse-ring{0%{transform:scale(.6);opacity:.6}100%{transform:scale(2.1);opacity:0}}
+@media (prefers-reduced-motion: reduce){.dot-ok::after{animation:none;display:none}}
 @keyframes pbad{0%,100%{opacity:1}50%{opacity:.25}}
 @keyframes pwarn{0%,100%{opacity:1}50%{opacity:.4}}
 .stn-name{font-size:15px;font-weight:800;letter-spacing:-0.3px}
@@ -208,6 +214,7 @@ body.dragging-group *{cursor:grabbing!important}
 /* states */
 .c-state{padding:32px 24px;text-align:center;color:var(--muted)}
 .c-state-ico{font-size:36px;margin-bottom:10px;display:block;opacity:.4}
+.c-state-ico svg{width:30px;height:30px}
 .c-state-msg{font-size:13px;color:var(--txt);margin-bottom:4px;font-weight:600}
 .c-state-sub{font-size:11px;margin-bottom:8px}
 .cors-hint{font-size:11px;background:var(--warn-bg);border:1px solid var(--warn);border-radius:var(--rs);padding:8px 12px;color:var(--warn);text-align:left;line-height:1.6;max-width:380px;margin:8px auto 0}
@@ -343,7 +350,7 @@ body.dragging-group *{cursor:grabbing!important}
 .al-strip-crit{background:var(--crit-bg);border-left:3px solid var(--crit)}
 .al-strip-high{background:var(--warn-bg);border-left:3px solid var(--warn)}
 .al-strip-info{background:rgba(255,165,0,.08);border-left:3px solid #FFA500}
-.al-strip-icon{flex-shrink:0;font-size:14px;width:18px;text-align:center}
+.al-strip-icon{flex-shrink:0;width:18px;display:flex;align-items:center;justify-content:center;padding-top:2px}
 .al-strip-body{flex:1;min-width:0}
 .al-strip-msg{font-weight:700;color:var(--txt)}
 .al-strip-det{font-size:11px;color:var(--muted);margin-top:2px}
@@ -353,7 +360,7 @@ body.dragging-group *{cursor:grabbing!important}
 /* alert log modal */
 .al-log-entry{display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid var(--bdr)}
 .al-log-entry:last-child{border-bottom:none}
-.al-log-icon{font-size:14px;flex-shrink:0;width:18px;text-align:center;padding-top:1px}
+.al-log-icon{flex-shrink:0;width:18px;display:flex;align-items:center;justify-content:center;padding-top:2px}
 .al-log-body{flex:1;min-width:0}
 .al-log-msg{font-size:12px;font-weight:600;color:var(--txt)}
 .al-log-det{font-size:11px;color:var(--muted);margin-top:2px}
@@ -768,6 +775,38 @@ function fmtEventTs(ts) {
   const d = new Date(ts);
   return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR');
 }
+// Ícones dos eventos/alertas em SVG em vez de emoji (consistência visual entre
+// SO/fonte — emoji renderiza diferente em cada máquina). Cor vem do nível do
+// evento (crit/high/ok/info), não fica hardcoded no ícone — assim continua
+// batendo com a cor mesmo se um dia trocarmos qual emoji vira qual ícone.
+const EVENT_ICON_PATHS = {
+  '🔴': { fill: true,  d: '<circle cx="12" cy="12" r="8"/>' },
+  '🟢': { fill: false, d: '<polyline points="20 6 9 17 4 12"/>' },
+  '🚨': { fill: false, d: '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>' },
+  '⚠️':  { fill: false, d: '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>' },
+  '🔧': { fill: false, d: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>' },
+  '🟠': { fill: true,  d: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10"/>' },
+  '⚪': { fill: false, d: '<circle cx="12" cy="12" r="7"/>' },
+  '🔋': { fill: false, d: '<rect x="2" y="7" width="16" height="10" rx="2"/><line x1="22" y1="11" x2="22" y2="13"/><line x1="7" y1="10" x2="7" y2="14"/><line x1="11" y1="10" x2="11" y2="14"/>' },
+};
+function eventIconSvg(emoji, level) {
+  const color = level === 'crit' ? 'var(--crit)' : level === 'high' ? 'var(--warn)' : level === 'ok' ? 'var(--good)' : 'var(--accent)';
+  const icon = EVENT_ICON_PATHS[emoji] || EVENT_ICON_PATHS['⚠️'];
+  return `<svg width="14" height="14" viewBox="0 0 24 24" fill="${icon.fill?'currentColor':'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:${color};display:block" aria-hidden="true">${icon.d}</svg>`;
+}
+
+// Selo de posição do ranking — número num círculo colorido em vez de emoji
+// de medalha (não some se emoji não renderizar, e não fica diferente entre
+// Windows/Mac/Linux).
+const RANK_COLORS = ['#E8B740', '#B9C2CC', '#C88A4E']; // ouro / prata / bronze
+function rankBadge(i) {
+  const c = RANK_COLORS[i];
+  const style = c
+    ? `background:${c}26;color:${c};border:1px solid ${c}66;font-weight:800`
+    : `background:var(--surf2);color:var(--muted);border:1px solid var(--bdr);font-weight:700`;
+  return `<span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;font-size:11px;flex-shrink:0;${style}">${i+1}</span>`;
+}
+
 function n(v,d=1) { return v==null||isNaN(v) ? '—' : parseFloat(v).toFixed(d) }
 function pct(v,mx) { return v==null ? 0 : Math.min(100,Math.max(0,v/mx*100)) }
 
@@ -826,7 +865,7 @@ function renderBTCard(stn, st, opts = {}) {
   if (loading && !d) {
     body = `<div class="c-state"><span class="c-state-ico">⟳</span><div class="c-state-msg">Conectando BT via WebSocket...</div><div class="c-state-sub">${esc(stn.url)}</div></div>`;
   } else if (err && !d) {
-    body = `<div class="c-state"><span class="c-state-ico">⚡</span><div class="c-state-msg">Sem resposta do transmissor BT</div><div class="c-state-sub">${esc(err)}</div></div>`;
+    body = `<div class="c-state"><span class="c-state-ico" style="color:var(--warn)">${icoWarnTriangle}</span><div class="c-state-msg">Sem resposta do transmissor BT</div><div class="c-state-sub">${esc(err)}</div></div>`;
   } else if (d) {
     const vswrCl  = d.vswr == null ? '' : d.vswr > 2.0 ? 'cr' : d.vswr > 1.5 ? 'wn' : 'ok';
     const tempCl  = d.temp == null ? '' : d.temp > 65 ? 'cr' : d.temp > 50 ? 'wn' : 'ok';
@@ -965,7 +1004,7 @@ function renderCard(stn, st, opts = {}) {
   if (loading && !d) {
     body = `<div class="c-state"><span class="c-state-ico">⟳</span><div class="c-state-msg">Conectando...</div><div class="c-state-sub">${esc(stn.url)}</div></div>`;
   } else if (err && !d) {
-    body = `<div class="c-state"><span class="c-state-ico">⚡</span><div class="c-state-msg">Sem resposta do transmissor</div><div class="c-state-sub">${esc(stn.url)}</div><div class="cors-hint"><strong>Dica:</strong> Abra este arquivo <code>dashboard.html</code> diretamente no navegador a partir de um PC na mesma rede do transmissor.<br>Erro: ${esc(err)}</div></div>`;
+    body = `<div class="c-state"><span class="c-state-ico" style="color:var(--warn)">${icoWarnTriangle}</span><div class="c-state-msg">Sem resposta do transmissor</div><div class="c-state-sub">${esc(stn.url)}</div><div class="cors-hint"><strong>Dica:</strong> Abra este arquivo <code>dashboard.html</code> diretamente no navegador a partir de um PC na mesma rede do transmissor.<br>Erro: ${esc(err)}</div></div>`;
   } else if (d) {
     const ps = pwrSt(d);
     const vs = vswrSt(d.ref.vswr);
@@ -982,7 +1021,7 @@ function renderCard(stn, st, opts = {}) {
           <span class="ph ${phSt(d.grid.s)}">S ${d.grid.s}V</span>
           <span class="ph ${phSt(d.grid.t)}">T ${d.grid.t}V</span>
         </div>
-        <div class="bat-row">🔋 <span class="bat-v">${n(d.grid.bat)} V</span> <span>(${d.grid.batA>=0?'+':''}${n(d.grid.batA)} A)</span></div>
+        <div class="bat-row">${icoBattery} <span class="bat-v">${n(d.grid.bat)} V</span> <span>(${d.grid.batA>=0?'+':''}${n(d.grid.batA)} A)</span></div>
       </div>` : '';
 
     const rfinHtml = d.rfin ? `
@@ -1088,7 +1127,7 @@ function renderCard(stn, st, opts = {}) {
       </div>
       <div style="display:flex;align-items:center;gap:10px">
         ${d ? `<span class="rf-badge ${d.rf?'on':'off'}">● RF ${d.rf?'ON':'OFF'}</span>` : ''}
-        ${err&&d ? `<span style="color:var(--warn);font-size:10px">⚠ Falha na atualização</span>` : ''}
+        ${err&&d ? `<span style="color:var(--warn);font-size:10px;display:inline-flex;align-items:center;gap:4px">${icoWarnTriangle} Falha na atualização</span>` : ''}
         <svg id="cchev-${stn.id}" class="grp-chev${cardCollapsed[stn.id]?'':' open'}" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
       </div>
     </div>
@@ -1527,7 +1566,7 @@ function renderAllNow() {
   if (document.getElementById('rankingModal')?.classList.contains('open')) renderRankingBody();
   const allEmpty = !cfg.groups.length || cfg.groups.every(gr => !gr.stations.length);
   if (allEmpty) {
-    setHtmlIfChanged(g, 'stnGrid', `<div class="empty"><div style="font-size:48px;margin-bottom:14px;opacity:.25">📡</div><h2>Nenhum grupo configurado</h2><p>Clique em Configurações e adicione um grupo e uma rádio.</p><button class="btn btn-p" onclick="addGroup();openCfg()">Adicionar Grupo</button></div>`);
+    setHtmlIfChanged(g, 'stnGrid', `<div class="empty"><div style="margin-bottom:14px;opacity:.3">${icoAntenna}</div><h2>Nenhum grupo configurado</h2><p>Clique em Configurações e adicione um grupo e uma rádio.</p><button class="btn btn-p" onclick="addGroup();openCfg()">Adicionar Grupo</button></div>`);
     return;
   }
 
@@ -1535,7 +1574,7 @@ function renderAllNow() {
   cfg.groups.forEach(gr => { htmlById[gr.id] = renderGroup(gr); });
   const visibleIds = new Set(cfg.groups.filter(gr => htmlById[gr.id].trim()).map(gr => gr.id));
   if (!visibleIds.size) {
-    setHtmlIfChanged(g, 'stnGrid', `<div class="empty"><div style="font-size:48px;margin-bottom:14px;opacity:.25">🔍</div><h2>Nenhuma rádio corresponde ao filtro</h2><p>Limpe o filtro na barra de resumo para ver todas as rádios.</p><button class="btn btn-p" onclick="setFilter('all')">Limpar filtro</button></div>`);
+    setHtmlIfChanged(g, 'stnGrid', `<div class="empty"><div style="margin-bottom:14px;opacity:.3">${icoSearch}</div><h2>Nenhuma rádio corresponde ao filtro</h2><p>Limpe o filtro na barra de resumo para ver todas as rádios.</p><button class="btn btn-p" onclick="setFilter('all')">Limpar filtro</button></div>`);
     return;
   }
 
@@ -1805,6 +1844,14 @@ function startStreamPoll(stn) {
 
 const icoStream = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1" fill="currentColor"/></svg>`;
 const icoBolt   = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10"/></svg>`;
+// Ícones SVG compartilhados — substituem emoji usados como ícone funcional em
+// vários pontos da tela (consistência visual entre SO/fonte).
+const icoWarnTriangle = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`;
+const icoBattery = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="16" height="10" rx="2"/><line x1="22" y1="11" x2="22" y2="13"/><line x1="7" y1="10" x2="7" y2="14"/><line x1="11" y1="10" x2="11" y2="14"/></svg>`;
+const icoBell = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>`;
+const icoAntenna = `<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 11a9 9 0 0 1 9-9"/><path d="M4 11a5 5 0 0 1 5-5"/><circle cx="4" cy="16" r="2"/><path d="M20 4 11 13"/><path d="m16 8 4-4-4 8"/></svg>`;
+const icoSearch = `<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`;
+const icoNote = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>`;
 
 function renderStreamSection(stn, ss) {
   const loading = !ss || (ss.loading && !ss.sources?.length);
@@ -1843,7 +1890,7 @@ function renderStreamSection(stn, ss) {
           <span class="str-mount">${esc(mountName)}</span>
           <span class="str-label">${esc(fmt)}${channels ? ` · ${channels}ch · ${samplerate}Hz` : samplerate ? ` · ${samplerate}Hz` : ''}</span>
         </div>
-        ${song ? `<div style="font-size:11px;color:var(--txt);opacity:.75;margin-bottom:6px">♪ ${esc(song)}</div>` : ''}
+        ${song ? `<div style="font-size:11px;color:var(--txt);opacity:.75;margin-bottom:6px;display:flex;align-items:center;gap:5px">${icoNote} ${esc(song)}</div>` : ''}
         <div class="str-metrics">
           <div><div class="lstn-big">${listeners}</div><div class="str-label">ouvintes</div></div>
           <div><div class="lstn-big" style="font-size:20px;color:var(--muted)">${peak}</div><div class="str-label">pico</div></div>
@@ -2272,7 +2319,7 @@ function renderGenSection(gen, gs, opts = {}) {
   const alarmsHtml = d.alarms.length ? `
     <div style="margin-top:8px">
       <div class="sec-lbl" style="margin-bottom:3px;color:var(--warn)">Alarmes Ativos</div>
-      ${d.alarms.map(a => `<div style="font-size:11px;color:var(--crit)">⚠ ${esc(typeof a==='string'?a:JSON.stringify(a))}</div>`).join('')}
+      ${d.alarms.map(a => `<div style="font-size:11px;color:var(--crit);display:flex;align-items:center;gap:5px">${icoWarnTriangle} ${esc(typeof a==='string'?a:JSON.stringify(a))}</div>`).join('')}
     </div>` : '';
 
   const fmtRun = s => { const h=Math.floor(s/3600),m=Math.floor((s%3600)/60); return h>0?`${h}h ${String(m).padStart(2,'0')}min`:`${m}min`; };
@@ -2281,7 +2328,7 @@ function renderGenSection(gen, gs, opts = {}) {
     ${d.starts != null ? `<span>Partidas: <strong>${d.starts}</strong></span>` : ''}
     ${d.serial ? `<span style="opacity:.55">${esc(d.serial)}</span>` : ''}
     ${gs.ts ? `<span>${new Date(gs.ts).toLocaleTimeString('pt-BR')}</span>` : ''}
-    ${gs.err ? `<span style="color:var(--warn)">⚠ ${esc(gs.err)}</span>` : ''}
+    ${gs.err ? `<span style="color:var(--warn);display:inline-flex;align-items:center;gap:4px">${icoWarnTriangle} ${esc(gs.err)}</span>` : ''}
   </div>`;
 
   // ── Controle remoto (só quando há host Modbus disponível) — envia comandos
@@ -2492,7 +2539,7 @@ function groupNotifyHtml(gr) {
   return `<div class="grp-cfg" style="margin-top:8px;background:var(--surf2)">
     <div class="grp-cfg-hd" onclick="toggleNotifyGrp('${gr.id}')" style="cursor:pointer;user-select:none;padding:8px 10px">
       <div style="display:flex;align-items:center;gap:8px;flex:1">
-        <span style="flex:1;font-size:12px;font-weight:600">🔔 Notificações deste grupo</span>
+        <span style="flex:1;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px">${icoBell} Notificações deste grupo</span>
       </div>
       <svg id="notifygrpchev-${gr.id}" class="grp-chev ${open?'open':''}" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
     </div>
@@ -2931,7 +2978,7 @@ function renderAlertBanner() {
       if (!ev) continue;
       const lvCls = ev.level==='crit' ? 'al-strip-crit' : ev.level==='high' ? 'al-strip-high' : 'al-strip-info';
       strips.push(`<div class="al-strip ${lvCls}">
-        <span class="al-strip-icon">${ev.icon}</span>
+        <span class="al-strip-icon">${eventIconSvg(ev.icon, ev.level)}</span>
         <div class="al-strip-body">
           <div class="al-strip-msg">${esc(ev.msg)}</div>
           ${ev.detail ? `<div class="al-strip-det">${esc(ev.detail)}</div>` : ''}
@@ -2977,7 +3024,7 @@ function renderAlertLogBody() {
     return;
   }
   body.innerHTML = filtered.map(ev => `<div class="al-log-entry">
-    <span class="al-log-icon">${ev.icon}</span>
+    <span class="al-log-icon">${eventIconSvg(ev.icon, ev.level)}</span>
     <div class="al-log-body">
       <div class="al-log-msg">${esc(ev.msg)}</div>
       ${ev.detail ? `<div class="al-log-det">${esc(ev.detail)}</div>` : ''}
@@ -3018,7 +3065,7 @@ function renderGenReportBody() {
       ? ' · Desligou: ' + ended + (r.approxEnd ? ' (aproximado — app estava fechado)' : '')
       : ' · Em andamento';
     return `<div class="al-log-entry">
-      <span class="al-log-icon">${r.endTs ? '⚪' : '🟠'}</span>
+      <span class="al-log-icon">${r.endTs ? eventIconSvg('⚪','info') : eventIconSvg('🟠','info')}</span>
       <div class="al-log-body">
         <div class="al-log-msg">${label}</div>
         <div class="al-log-det">Ligou: ${started}${endedLabel}</div>
@@ -3068,9 +3115,8 @@ function renderRankingBody() {
     el.innerHTML = `<div class="al-empty">Nenhuma rádio com streaming configurado.</div>`;
     return;
   }
-  const medals = ['🥇', '🥈', '🥉'];
   el.innerHTML = rows.map((r, i) => {
-    const rankIcon = medals[i] || `<span style="color:var(--muted);font-weight:700">${i + 1}º</span>`;
+    const rankIcon = rankBadge(i);
     const statusPill = r.loading
       ? `<span style="font-size:10px;color:var(--muted)">⟳ conectando...</span>`
       : r.online
@@ -3103,11 +3149,9 @@ function renderRankingPanel() {
   const rows = computeListenerRanking();
   if (!rows.length) { setHtmlIfChanged(el, 'rankingPanel', ''); el.style.display = 'none'; return; }
   el.style.display = '';
-  const medals = ['🥇', '🥈', '🥉'];
   const items = rows.map((r, i) => {
-    const rankLbl = medals[i] || `${i + 1}º`;
     return `<div class="rank-item">
-      <span class="rank-pos">${rankLbl}</span>
+      <span class="rank-pos">${rankBadge(i)}</span>
       <span class="rank-name">${esc(r.name)}</span>
       <span class="rank-num${r.online ? '' : ' off'}">${r.listeners}</span>
     </div>`;
