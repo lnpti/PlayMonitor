@@ -41,6 +41,12 @@
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,'Segoe UI',Arial,sans-serif;font-size:13px;line-height:1.5;min-height:100vh}
+/* Números/dados que mudam a cada atualização (RPM, tensão, potência,
+   timestamps) ganham uma fonte técnica monoespaçada — reforça a leitura
+   "painel de operação" e evita que os dígitos "dancem" de largura a cada
+   valor novo (já usam tabular-nums, isso completa o efeito). */
+:root{--font-num:ui-monospace,'Cascadia Code','JetBrains Mono','SF Mono',Consolas,monospace}
+:is(.rank-num,.pwr-num,.vu-vert-val,.mm-val,.pa-v,.pa-stages,.ph,.bat-v,.tmp-big,.aud-n,.lstn-big,.sb-count,.sum-chip-num,.row-compact-metric,.al-log-ts,.al-strip-ts,.str-footer,.stn-meta strong){font-family:var(--font-num)}
 
 /* ─── HEADER ─── */
 .hd{display:flex;align-items:center;justify-content:space-between;padding:10px 20px;background:var(--surf);border-bottom:1px solid var(--bdr);position:sticky;top:0;z-index:100;gap:12px;flex-wrap:wrap}
@@ -143,8 +149,8 @@ body.dragging-group *{cursor:grabbing!important}
 .rf-badge.off{color:var(--crit)}
 
 /* metrics 3-col */
-.m-grid{display:grid;grid-template-columns:1.3fr 1fr .85fr;border-bottom:1px solid var(--bdr)}
-.m-sec{padding:12px 14px;border-right:1px solid var(--bdr)}
+.m-grid{display:grid;grid-template-columns:1.3fr 1fr .85fr;border-bottom:1px solid color-mix(in srgb, var(--bdr) 60%, transparent)}
+.m-sec{padding:13px 15px;border-right:1px solid color-mix(in srgb, var(--bdr) 60%, transparent)}
 .m-sec:last-child{border-right:none}
 .sec-lbl{font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:700;margin-bottom:8px}
 
