@@ -369,6 +369,9 @@ body.dragging-group *{cursor:grabbing!important}
 @keyframes al-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
 .chart-card{background:var(--surf2);border:1px solid var(--bdr);border-radius:var(--rs);padding:12px 14px 8px;margin:10px 0}
 .chart-card-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:6px}
+.chart-card-hd{display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;user-select:none;margin-bottom:6px}
+.chart-card-hd .chart-card-title{margin-bottom:0}
+.chart-card.collapsed .chart-card-body{display:none}
 .chart-svg{width:100%;height:auto;display:block;overflow:visible}
 .chart-svg .grid-line{stroke:var(--bdr);stroke-width:1}
 .chart-svg .axis-lbl{fill:var(--muted);font-size:8.5px;font-family:inherit;font-variant-numeric:tabular-nums}
@@ -560,27 +563,37 @@ body.dragging-group *{cursor:grabbing!important}
       <div style="display:flex;gap:8px;padding:10px 0;flex-wrap:wrap;align-items:center;flex-shrink:0">
         <select class="inp" id="lrStnSelect" onchange="renderListenerReportBody()" style="flex:1;min-width:180px"></select>
         <div class="density-toggle">
+          <button type="button" class="density-btn" id="lrTabHourly" onclick="setListenerReportMode('hourly')">Horário</button>
           <button type="button" class="density-btn active" id="lrTabDaily" onclick="setListenerReportMode('daily')">Diário</button>
           <button type="button" class="density-btn" id="lrTabMonthly" onclick="setListenerReportMode('monthly')">Mensal</button>
         </div>
       </div>
       <div style="overflow-y:auto">
-        <div class="chart-card">
-          <div class="chart-card-title">Todas as rádios</div>
-          <div id="lrChartAll"></div>
-        </div>
-        <div class="chart-card">
-          <div class="chart-card-title" id="lrChartStnTitle">Rádio selecionada</div>
-          <div id="lrChartStn"></div>
-        </div>
-        <div class="chart-card">
-          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:6px">
-            <div class="chart-card-title" id="lrChartHourTitle" style="margin-bottom:0">Ouvintes por hora</div>
-            <input type="date" class="inp" id="lrHourDate" onchange="renderListenerHourlyChart()" style="width:150px;height:28px">
+        <div class="chart-card" id="lrCard_hour" style="display:none">
+          <div class="chart-card-hd" onclick="toggleChartCard('hour')">
+            <div class="chart-card-title" id="lrChartHourTitle">Ouvintes por hora</div>
+            <input type="date" class="inp" id="lrHourDate" onclick="event.stopPropagation()" onchange="renderListenerHourlyChart()" style="width:150px;height:28px">
+            <svg id="lrChev_hour" class="grp-chev open" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
           </div>
-          <div id="lrChartHour"></div>
+          <div class="chart-card-body" id="lrChartHour"></div>
         </div>
-        <div id="listenerReportBody"></div>
+        <div id="lrTrendSection">
+          <div class="chart-card" id="lrCard_all">
+            <div class="chart-card-hd" onclick="toggleChartCard('all')">
+              <div class="chart-card-title">Todas as rádios</div>
+              <svg id="lrChev_all" class="grp-chev open" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+            <div class="chart-card-body" id="lrChartAll"></div>
+          </div>
+          <div class="chart-card" id="lrCard_stn">
+            <div class="chart-card-hd" onclick="toggleChartCard('stn')">
+              <div class="chart-card-title" id="lrChartStnTitle">Rádio selecionada</div>
+              <svg id="lrChev_stn" class="grp-chev open" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+            <div class="chart-card-body" id="lrChartStn"></div>
+          </div>
+          <div id="listenerReportBody"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -810,8 +823,11 @@ function refreshListenerReportIfShowing(stnId) {
   if (lrLiveRefreshTimer) return;
   lrLiveRefreshTimer = setTimeout(() => {
     lrLiveRefreshTimer = null;
-    if (listenerReportMode === 'daily') { renderListenerReportBody(); return; }
-    if (document.getElementById('lrHourDate')?.value === localDateStr()) renderListenerHourlyChart();
+    if (listenerReportMode === 'hourly') {
+      if (document.getElementById('lrHourDate')?.value === localDateStr()) renderListenerHourlyChart();
+      return;
+    }
+    renderListenerReportBody();
   }, 800);
 }
 function todaysListenerPeak(stnId) {
@@ -1065,10 +1081,21 @@ function wireChartHover(wrapEl, geo) {
 }
 
 let listenerReportMode = 'daily';
+let lrCardCollapsed = {}; // { all, stn, hour } -> bool, só na sessão (não persiste)
+function toggleChartCard(key) {
+  lrCardCollapsed[key] = !lrCardCollapsed[key];
+  const card = document.getElementById('lrCard_' + key);
+  const chev = document.getElementById('lrChev_' + key);
+  if (card) card.classList.toggle('collapsed', !!lrCardCollapsed[key]);
+  if (chev) chev.classList.toggle('open', !lrCardCollapsed[key]);
+}
 function setListenerReportMode(mode) {
   listenerReportMode = mode;
+  document.getElementById('lrTabHourly').classList.toggle('active', mode === 'hourly');
   document.getElementById('lrTabDaily').classList.toggle('active', mode === 'daily');
   document.getElementById('lrTabMonthly').classList.toggle('active', mode === 'monthly');
+  document.getElementById('lrCard_hour').style.display = mode === 'hourly' ? '' : 'none';
+  document.getElementById('lrTrendSection').style.display = mode === 'hourly' ? 'none' : '';
   renderListenerReportBody();
 }
 function openListenerReport() {
@@ -1091,7 +1118,7 @@ function closeListenerReport() { document.getElementById('listenerReportModal').
 function selectListenerHourDay(dayKey) {
   const inp = document.getElementById('lrHourDate');
   if (inp) inp.value = dayKey;
-  renderListenerReportBody();
+  setListenerReportMode('hourly'); // muda pra aba Horário pra já mostrar o resultado do clique
 }
 function renderListenerHourlyChart() {
   const stnId = document.getElementById('lrStnSelect')?.value;
@@ -1115,16 +1142,22 @@ function clearListenerReportForStation() {
   renderListenerReportBody();
 }
 function renderListenerReportBody() {
+  const stnId = document.getElementById('lrStnSelect')?.value;
+
+  if (listenerReportMode === 'hourly') {
+    renderListenerHourlyChart();
+    return;
+  }
+
   const body = document.getElementById('listenerReportBody');
   if (!body) return;
-  const stnId = document.getElementById('lrStnSelect')?.value;
   const modeLabel = listenerReportMode === 'daily' ? 'diário' : 'mensal';
 
   const allChartEl = document.getElementById('lrChartAll');
   if (allChartEl) {
     const { keys, series, omitted, total } = combinedListenerSeries(listenerReportMode);
     renderTrendChart(allChartEl, keys, series, { mode: listenerReportMode, forceLegend: true, endLabels: false, emptyMsg: 'Ainda sem dados suficientes para o gráfico.' });
-    const titleEl = allChartEl.parentElement.querySelector('.chart-card-title');
+    const titleEl = allChartEl.closest('.chart-card').querySelector('.chart-card-title');
     if (titleEl) titleEl.textContent = `Todas as rádios — pico ${modeLabel}` + (omitted > 0 ? ` (8 de ${total} rádios com mais ouvintes)` : '');
   }
   const stnChartEl = document.getElementById('lrChartStn');
@@ -1138,8 +1171,6 @@ function renderListenerReportBody() {
       renderTrendChart(stnChartEl, keys, series, { mode: listenerReportMode, emptyMsg: 'Ainda sem dados suficientes — o histórico começa a ser guardado a partir de agora, com a rádio online.' });
     }
   }
-
-  renderListenerHourlyChart();
 
   if (!stnId) { body.innerHTML = `<div class="al-empty">Nenhuma rádio com streaming configurado.</div>`; return; }
   const rows = listenerReportMode === 'daily' ? listenerDailyRows(stnId, 60) : listenerMonthlyRows(stnId);
