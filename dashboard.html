@@ -3264,7 +3264,7 @@ function stnRowHtml(s, gId) {
     </div>
     <div id="stnbody-${s.id}" style="display:${collapsed?'none':''};margin-top:10px">
       <div class="stn-row-main">
-        <div><div class="lbl">Tipo</div><select class="inp" onchange="updStn('${s.id}','txType',this.value);renderStnList()"><option value="standard" ${(s.txType||'standard')==='standard'?'selected':''}>Padrão</option><option value="bt" ${s.txType==='bt'?'selected':''}>BT APP10</option><option value="snmp" ${s.txType==='snmp'?'selected':''}>Synteck RUS (SNMP)</option></select></div>
+        <div><div class="lbl">Tipo</div><select class="inp" onchange="updStn('${s.id}','txType',this.value);renderStnList()"><option value="standard" ${(s.txType||'standard')==='standard'?'selected':''}>Synteck XT</option><option value="bt" ${s.txType==='bt'?'selected':''}>BT APP10</option><option value="snmp" ${s.txType==='snmp'?'selected':''}>Synteck RUS (SNMP)</option></select></div>
         ${s.txType==='snmp' ? `
         <div><div class="lbl">Host / IP</div><input type="text" class="inp" placeholder="187.0.1.47" value="${esc(s.snmpHost||'')}" onchange="updStn('${s.id}','snmpHost',this.value)"></div>
         <div><div class="lbl">Porta</div><input type="number" class="inp" placeholder="161" value="${esc(s.snmpPort||'')}" min="1" max="65535" onchange="updStn('${s.id}','snmpPort',+this.value)"></div>
