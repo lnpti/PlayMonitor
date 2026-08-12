@@ -51,6 +51,7 @@
   },
   "dependencies": {
     "electron-updater": "^6.8.9",
+    "net-snmp": "^3.26.3",
     "nodemailer": "^9.0.5"
   }
 }

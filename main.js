@@ -3,6 +3,7 @@ const path = require('path');
 const net = require('net');
 const { autoUpdater } = require('electron-updater');
 const nodemailer = require('nodemailer');
+const snmp = require('net-snmp');
 
 let mainWindow = null;
 
@@ -242,6 +243,55 @@ ipcMain.handle('modbus-gen-control', async (event, { host, port, action }) => {
   if (!host || typeof host !== 'string') return { success: false, error: 'host inválido' };
   const p = Number(port) || 502;
   return sendGenControl(host, p, action);
+});
+
+// ── SNMP (transmissores Synteck RUS, MIB SINTECK-RUS-SNMP-MIB) ──
+// Igual ao Modbus, SNMP é UDP puro — a tela não consegue fazer isso sozinha
+// via fetch(). Usa a lib net-snmp (BER/ASN.1 é complexo demais pra valer a
+// pena reimplementar à mão, diferente do framing simples do Modbus TCP).
+// Alguns OIDs podem não existir em certos firmwares/modelos (confirmado ao
+// vivo contra um transmissor real: 4 dos 24 OIDs voltaram "NoSuchObject") —
+// por isso um OID individual faltando vira `null` no resultado, não faz o
+// pedido inteiro falhar; só timeout/erro de sessão retorna success:false.
+function snmpGet(host, port, community, oids) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (val) => { if (settled) return; settled = true; resolve(val); };
+    let session;
+    try {
+      session = snmp.createSession(host, community || 'public', {
+        port: Number(port) || 161,
+        version: snmp.Version2c,
+        timeout: 4000,
+        retries: 1,
+      });
+    } catch (e) {
+      finish({ success: false, error: e.message || String(e) });
+      return;
+    }
+    session.on('error', (err) => {
+      try { session.close(); } catch (e) {}
+      finish({ success: false, error: (err && err.message) || String(err) });
+    });
+    session.get(oids, (error, varbinds) => {
+      try { session.close(); } catch (e) {}
+      if (error) { finish({ success: false, error: error.message || String(error) }); return; }
+      const values = {};
+      for (const vb of varbinds) {
+        if (snmp.isVarbindError(vb)) { values[vb.oid] = null; continue; }
+        let v = vb.value;
+        if (Buffer.isBuffer(v)) v = v.toString('utf8');
+        values[vb.oid] = v;
+      }
+      finish({ success: true, values });
+    });
+  });
+}
+
+ipcMain.handle('snmp-get', async (event, { host, port, community, oids }) => {
+  if (!host || typeof host !== 'string') return { success: false, error: 'host inválido' };
+  if (!Array.isArray(oids) || !oids.length) return { success: false, error: 'oids inválidos' };
+  return snmpGet(host, port, community, oids);
 });
 
 function createWindow() {

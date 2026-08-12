@@ -9,6 +9,10 @@ contextBridge.exposeInMainWorld('modbusAPI', {
   sendGenControl: (host, port, action) => ipcRenderer.invoke('modbus-gen-control', { host, port, action }),
 });
 
+contextBridge.exposeInMainWorld('snmpAPI', {
+  get: (host, port, community, oids) => ipcRenderer.invoke('snmp-get', { host, port, community, oids }),
+});
+
 contextBridge.exposeInMainWorld('updateAPI', {
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),

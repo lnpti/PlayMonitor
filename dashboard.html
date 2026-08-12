@@ -1350,6 +1350,82 @@ function stopBTConn(id) {
   if (ws) { ws.onclose = null; ws.close(); delete btWs[id]; }
 }
 
+/* ── SNMP (transmissor Synteck RUS, MIB SINTECK-RUS-SNMP-MIB) ──
+   OIDs derivados de enterprises.54532.1.1.<n> — objetos escalares, sempre
+   com o sufixo ".0" da instância (sem ele o agente responde NoSuchObject,
+   confirmado testando ao vivo). Escalas/unidades também confirmadas contra
+   um transmissor real: potências em Watts puros, temperatura/umidade em
+   décimos, frequência em centésimos de MHz; -1 é o valor que o equipamento
+   usa pra "não aplicável" (ex.: sem módulo de bateria instalado). Alguns
+   OIDs (entrada/áudio do excitador) não existem em todo firmware — nesses
+   casos o main.js devolve null pra esse OID específico, sem derrubar a
+   leitura inteira; a seção correspondente do card simplesmente não aparece. */
+const RUS_BASE = '1.3.6.1.4.1.54532.1.1.';
+const RUS_OID = {
+  fwd: RUS_BASE+'1.0', fwdInt: RUS_BASE+'2.0', ref: RUS_BASE+'3.0', refInt: RUS_BASE+'4.0',
+  rfIn: RUS_BASE+'5.0', temp: RUS_BASE+'6.0', status: RUS_BASE+'7.0', powerState: RUS_BASE+'8.0',
+  bladeCount: RUS_BASE+'9.0', activeBladeCount: RUS_BASE+'10.0', battery: RUS_BASE+'11.0',
+  siteTemp: RUS_BASE+'12.0', siteHumidity: RUS_BASE+'13.0', stationName: RUS_BASE+'14.0',
+  frequency: RUS_BASE+'15.0', failState: RUS_BASE+'16.0', warnings: RUS_BASE+'17.0',
+  errors: RUS_BASE+'18.0', preset: RUS_BASE+'19.0', exciterActive: RUS_BASE+'20.0',
+  exciterInput: RUS_BASE+'21.0', audioLeft: RUS_BASE+'22.0', audioRight: RUS_BASE+'23.0', audioMpx: RUS_BASE+'24.0',
+};
+const RUS_OID_LIST = Object.values(RUS_OID);
+const RUS_POWER_STATE = { 1:'Desligado', 2:'Modo seguro', 3:'Ligado', 4:'Desligado (chave coaxial)' };
+const RUS_EXCITER_ACTIVE = { 1:'Excitador desligado', 2:'Excitador 1', 3:'Excitador 2' };
+const RUS_EXCITER_INPUT = { 1:'Interno', 2:'Externo', 3:'USB' };
+const RUS_PRESET = { 1:'Preset 1', 2:'Preset 2', 3:'Preset 3', 4:'Preset 4', 5:'Preset 5', 6:'Preset 6' };
+
+function rusComputeVSWR(fwd, ref) {
+  if (fwd == null || ref == null || fwd <= 0) return null;
+  const ratio = Math.max(0, Math.min(0.999, ref / fwd));
+  const gamma = Math.sqrt(ratio);
+  return (1 + gamma) / (1 - gamma);
+}
+function parseRUSData(values) {
+  const raw = (k) => { const v = values[RUS_OID[k]]; return v == null ? null : v; };
+  const num = (k) => { const v = raw(k); return v == null ? null : Number(v); };
+  const numOrNull = (k) => { const v = num(k); return (v == null || v < 0) ? null : v; }; // -1 = N/A no equipamento
+  const str = (k) => { const v = raw(k); return v == null ? '' : String(v); };
+  const fwd = num('fwd'), ref = num('ref');
+  const temp = num('temp'), siteTemp = num('siteTemp'), siteHumidity = num('siteHumidity'), frequency = num('frequency');
+  return {
+    _isSNMP: true,
+    fwd, fwdInt: num('fwdInt'), ref, refInt: num('refInt'), rfIn: num('rfIn'),
+    vswr: rusComputeVSWR(fwd, ref),
+    temp: temp != null ? temp / 10 : null,
+    statusText: str('status'),
+    powerState: RUS_POWER_STATE[num('powerState')] || null,
+    bladeCount: num('bladeCount'), activeBladeCount: num('activeBladeCount'),
+    battery: numOrNull('battery'),
+    siteTemp: siteTemp != null ? siteTemp / 10 : null,
+    siteHumidity: siteHumidity != null ? siteHumidity / 10 : null,
+    stationName: str('stationName'),
+    frequency: frequency != null ? frequency / 100 : null,
+    failState: num('failState') === 2,
+    warnings: num('warnings'), errors: num('errors'),
+    preset: RUS_PRESET[num('preset')] || null,
+    exciterActive: RUS_EXCITER_ACTIVE[numOrNull('exciterActive')] || null,
+    exciterInput: RUS_EXCITER_INPUT[num('exciterInput')] || null,
+    audioLeft: num('audioLeft'), audioRight: num('audioRight'), audioMpx: num('audioMpx'),
+  };
+}
+async function fetchSNMPStn(stn) {
+  try {
+    if (!window.snmpAPI) throw new Error('SNMP indisponível neste app');
+    if (!stn.snmpHost) throw new Error('Host SNMP não configurado');
+    const res = await window.snmpAPI.get(stn.snmpHost, stn.snmpPort || 161, stn.snmpCommunity || 'public', RUS_OID_LIST);
+    if (!res.success) throw new Error(res.error || 'Falha SNMP');
+    live[stn.id] = { data: parseRUSData(res.values), err: null, loading: false, ts: Date.now() };
+  } catch (e) {
+    const prev = live[stn.id];
+    live[stn.id] = { data: prev?.data||null, err: e.message||'Falha na conexão SNMP', loading: false, ts: prev?.ts||null };
+  }
+  evaluateStnConnAlerts(stn);
+  renderAll();
+  updateGlobalTs();
+}
+
 /* ── STATUS HELPERS ── */
 function pwrSt(d) {
   if (d.fwd.w==null||d.fwd.tgt==null) return 'n';
@@ -1405,6 +1481,7 @@ function n(v,d=1) { return v==null||isNaN(v) ? '—' : parseFloat(v).toFixed(d) 
 function pct(v,mx) { return v==null ? 0 : Math.min(100,Math.max(0,v/mx*100)) }
 
 const hasTelemetryUrl = s => s.url && !s.url.includes('IP:') && s.url.trim() !== '';
+const hasSNMPHost = s => s.txType === 'snmp' && !!(s.snmpHost && s.snmpHost.trim());
 
 /* ── STATUS ÚNICO (dot do card, sidebar, barra de resumo) ── */
 function stationStatus(stn) {
@@ -1412,6 +1489,9 @@ function stationStatus(stn) {
   if (stn.txType === 'bt') {
     const st = live[stn.id]; const d = st?.data;
     base = (st?.loading && !d) ? 'loading' : !d ? 'err' : d.hasAlarms ? 'err' : 'ok';
+  } else if (stn.txType === 'snmp') {
+    const st = live[stn.id]; const d = st?.data;
+    base = (st?.loading && !d) ? 'loading' : !d ? 'err' : d.failState ? 'err' : 'ok';
   } else if (hasTelemetryUrl(stn)) {
     const st = live[stn.id]; const d = st?.data;
     base = (st?.loading && !d) ? 'loading' : !d ? 'err' : d.faults ? 'err' : 'ok';
@@ -1431,6 +1511,7 @@ function stationStatus(stn) {
 }
 
 const stationHasContent = s => hasTelemetryUrl(s)
+  || hasSNMPHost(s)
   || (s.streamUrl && s.streamUrl.trim() !== '')
   || (s.generators||[]).some(g => g.url && g.url.trim() !== '');
 
@@ -1566,6 +1647,7 @@ function renderBTCard(stn, st, opts = {}) {
 /* ── CARD RENDER ── */
 function renderCard(stn, st, opts = {}) {
   if (stn.txType === 'bt') return renderBTCard(stn, st, opts);
+  if (stn.txType === 'snmp') return renderSNMPCard(stn, st, opts);
 
   // Streaming/generator-only card (no telemetry URL configured)
   if (!hasTelemetryUrl(stn)) {
@@ -1731,6 +1813,135 @@ function renderCard(stn, st, opts = {}) {
   </div>`;
 }
 
+/* ── SNMP (RUS) CARD RENDER ── */
+function renderSNMPCard(stn, st, opts = {}) {
+  if (!hasSNMPHost(stn)) {
+    const ss = liveStream[stn.id];
+    const online = ss?.online;
+    const dotCls = !ss || (ss.loading && !ss.sources?.length) ? 'dot dot-ld' : online ? 'dot dot-ok' : 'dot dot-err';
+    const innerContent = (stn.streamUrl ? renderStreamSection(stn, ss) : '')
+      + (stn.generators||[]).map(gen => renderGenSection(gen, liveGen[gen.id], { compact: opts.compact })).join('');
+    if (opts.bodyOnly) return innerContent;
+    return `<div class="card" id="card-${stn.id}">
+      <div class="c-head">
+        <div class="c-head-l">
+          <span class="${dotCls}"></span>
+          <div><div class="stn-name">${esc(stn.name)}</div></div>
+        </div>
+        <svg id="cchev-${stn.id}" class="grp-chev${cardCollapsed[stn.id]?'':' open'}" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <div id="cbody-${stn.id}"${cardCollapsed[stn.id]?' style="display:none"':''}>
+        ${innerContent}
+      </div>
+    </div>`;
+  }
+
+  const { data:d, err, loading } = st||{ data:null, err:null, loading:true };
+  const hasFault = !!(d && d.failState);
+  const dotCls = loading&&!d ? 'dot dot-ld' : err&&!d ? 'dot dot-err' : hasFault ? 'dot dot-err' : 'dot dot-ok';
+  const hostLabel = stn.snmpHost + (stn.snmpPort && +stn.snmpPort !== 161 ? ':'+stn.snmpPort : '');
+
+  let body = '';
+
+  if (loading && !d) {
+    body = `<div class="c-state"><span class="c-state-ico">⟳</span><div class="c-state-msg">Conectando (SNMP)...</div><div class="c-state-sub">${esc(hostLabel)}</div></div>`;
+  } else if (err && !d) {
+    body = `<div class="c-state"><span class="c-state-ico" style="color:var(--warn)">${icoWarnTriangle}</span><div class="c-state-msg">Sem resposta do transmissor</div><div class="c-state-sub">${esc(hostLabel)}</div><div class="cors-hint"><strong>Erro:</strong> ${esc(err)}</div></div>`;
+  } else if (d) {
+    const vs = vswrSt(d.vswr);
+    const ts = tmpSt(d.temp);
+    const hasAudio = d.audioLeft != null || d.audioRight != null || d.audioMpx != null;
+
+    body = `
+      ${hasFault ? `<div class="fault-bar"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 22 20 2 20"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> FALHA DETECTADA${d.statusText ? ': '+esc(d.statusText) : ''}</div>` : ''}
+      <div class="m-grid">
+        <div class="m-sec">
+          <div class="sec-lbl">Potência RF Direta</div>
+          <div class="pwr-big">
+            <span class="pwr-num" style="color:var(--num)">${d.fwd!=null ? (d.fwd/1000).toFixed(2) : '—'}</span>
+            <span class="pwr-unit">kW</span>
+          </div>
+          <div class="ref-row">
+            <div class="mm"><span class="mm-lbl">Refletida</span><span class="mm-val">${d.ref!=null ? (d.ref/1000).toFixed(2)+' kW' : '—'}</span></div>
+            <div class="mm"><span class="mm-lbl">VSWR</span><span class="mm-val ${stClass(vs)}">${d.vswr!=null ? d.vswr.toFixed(2)+':1' : '—'}</span></div>
+            <div class="mm"><span class="mm-lbl">Entrada RF</span><span class="mm-val">${n(d.rfIn,0)} W</span></div>
+          </div>
+        </div>
+        <div class="m-sec">
+          <div class="sec-lbl">Módulos (Blades)</div>
+          <div style="margin-bottom:8px">
+            <div class="mm-lbl" style="margin-bottom:3px">Ativos</div>
+            <div style="display:flex;align-items:baseline;gap:4px"><span class="pa-v">${n(d.activeBladeCount,0)}</span><span style="color:var(--muted);font-size:12px">/ ${n(d.bladeCount,0)}</span></div>
+          </div>
+          ${d.battery!=null ? `<div><div class="mm-lbl" style="margin-bottom:3px">Bateria</div><div class="bat-row">${icoBattery} <span class="bat-v">${n(d.battery,0)}</span></div></div>` : ''}
+        </div>
+        <div class="m-sec">
+          <div class="sec-lbl">Temperatura Interna</div>
+          <div class="tmp-big ${stClass(ts)}">${n(d.temp)}°C</div>
+          <div class="ref-row" style="margin-top:10px">
+            <div class="mm"><span class="mm-lbl">Site (amb.)</span><span class="mm-val">${d.siteTemp!=null ? n(d.siteTemp)+'°C' : '—'}</span></div>
+            <div class="mm"><span class="mm-lbl">Umidade</span><span class="mm-val">${d.siteHumidity!=null ? n(d.siteHumidity)+'%' : '—'}</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="b-grid">
+        ${hasAudio ? `<div class="aud-sec">
+          <div class="sec-lbl">Áudio (Excitador)</div>
+          <div class="aud-meters">
+            ${d.audioLeft!=null ? `<div class="aud-row"><span class="aud-ch">L</span><div class="aud-bw"><div class="aud-bf" style="width:${Math.min(100,d.audioLeft)}%"></div></div><span class="aud-n">${d.audioLeft}</span></div>` : ''}
+            ${d.audioRight!=null ? `<div class="aud-row"><span class="aud-ch">R</span><div class="aud-bw"><div class="aud-bf" style="width:${Math.min(100,d.audioRight)}%"></div></div><span class="aud-n">${d.audioRight}</span></div>` : ''}
+            ${d.audioMpx!=null ? `<div class="aud-row"><span class="aud-ch">MPX</span><div class="aud-bw"><div class="aud-bf" style="width:${Math.min(100,d.audioMpx)}%"></div></div><span class="aud-n">${d.audioMpx}</span></div>` : ''}
+          </div>
+        </div>` : '<div></div>'}
+        <div class="sts-sec">
+          <div class="sec-lbl">Status</div>
+          <div class="sts-pills">
+            ${d.powerState ? `<span class="pill ${hasFault?'off':'on'}"><span class="pill-d"></span>${esc(d.powerState)}</span>` : ''}
+            ${d.preset ? `<span class="pill n">${esc(d.preset)}</span>` : ''}
+            ${d.exciterActive ? `<span class="pill ac"><span class="pill-d"></span>${esc(d.exciterActive)}</span>` : ''}
+            ${d.exciterInput ? `<span class="pill n">Entrada: ${esc(d.exciterInput)}</span>` : ''}
+          </div>
+          ${(d.warnings || d.errors) ? `<div class="sts-time" style="color:var(--warn)">${d.warnings?`Avisos (código ${d.warnings})`:''}${d.warnings&&d.errors?' · ':''}${d.errors?`Erros (código ${d.errors})`:''}</div>` : ''}
+          ${d.statusText ? `<div class="sts-time">${esc(d.statusText)}</div>` : ''}
+        </div>
+      </div>
+      <div class="c-foot">
+        <div style="display:flex;align-items:center;gap:6px">
+          <span class="chip">SNMP · Synteck RUS</span>
+        </div>
+        <div></div>
+        ${st.ts ? `<span>Atualizado: ${new Date(st.ts).toLocaleTimeString('pt-BR')}</span>` : ''}
+      </div>`;
+  }
+
+  const innerContent = `${body}`
+    + (stn.streamUrl ? renderStreamSection(stn, liveStream[stn.id]) : '')
+    + (stn.generators||[]).map(gen => renderGenSection(gen, liveGen[gen.id], { compact: opts.compact })).join('');
+
+  if (opts.bodyOnly) return innerContent;
+
+  return `<div class="card ${hasFault?'fault':''}" id="card-${stn.id}">
+    <div class="c-head">
+      <div class="c-head-l">
+        <span class="${dotCls}"></span>
+        <div>
+          <div class="stn-name">${esc(stn.name)}</div>
+          <div class="stn-meta">
+            ${d?.frequency!=null ? `<strong>${d.frequency.toFixed(2)} MHz</strong>` : ''}
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        ${err&&d ? `<span style="color:var(--warn);font-size:10px;display:inline-flex;align-items:center;gap:4px">${icoWarnTriangle} Falha na atualização</span>` : ''}
+        <svg id="cchev-${stn.id}" class="grp-chev${cardCollapsed[stn.id]?'':' open'}" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+    </div>
+    <div id="cbody-${stn.id}"${cardCollapsed[stn.id]?' style="display:none"':''}>
+      ${innerContent}
+    </div>
+  </div>`;
+}
+
 /* ── LINHA COMPACTA (densidade "compacto") ── */
 function renderCardCompact(stn, st) {
   const expanded = !!rowExpanded[stn.id];
@@ -1746,6 +1957,11 @@ function renderCardCompact(stn, st) {
       : (d.fwdPct != null && (d.fwdPct < 90 || d.fwdPct > 107)) ? 'wn' : 'ok';
     metricHtml = `<span class="row-compact-metric ${cls}">${d?.fwdKw != null ? d.fwdKw.toFixed(2) + ' kW' : '—'}</span>`;
     extraBadge = !d ? '' : d.on ? miniPill('on', 'NO AR') : `<span class="pill" style="font-size:9px;padding:2px 7px;background:var(--surf2);color:var(--muted)"><span class="pill-d"></span>OFF</span>`;
+  } else if (stn.txType === 'snmp') {
+    const d = st?.data;
+    const cls = !d ? '' : d.failState ? 'cr' : 'ok';
+    metricHtml = `<span class="row-compact-metric ${cls}">${d?.fwd != null ? (d.fwd/1000).toFixed(2) + ' kW' : '—'}</span>`;
+    extraBadge = d ? miniPill(d.failState ? 'off' : 'on', d.failState ? 'FALHA' : 'OK') : '';
   } else if (hasTelemetryUrl(stn)) {
     const d = st?.data;
     const cls = d ? stClass(pwrSt(d)) : '';
@@ -1757,7 +1973,7 @@ function renderCardCompact(stn, st) {
     extraBadge = miniPill(online ? 'on' : (ss && !ss.loading ? 'off' : 'n'), 'Stream');
   }
 
-  const streamBadge = (stn.streamUrl && hasTelemetryUrl(stn))
+  const streamBadge = (stn.streamUrl && (hasTelemetryUrl(stn) || stn.txType === 'snmp'))
     ? miniPill(liveStream[stn.id]?.online ? 'on' : 'off', 'Stream')
     : '';
   const genBadge = genStatusBadge(stn.generators || []);
@@ -1819,6 +2035,11 @@ function computeSummary() {
       if (st?.loading && !d) isLoading = true;
       else if (!d) noData = true;
       else if (d.hasAlarms) hasFault = true;
+    } else if (s.txType === 'snmp') {
+      const st = live[s.id]; const d = st?.data;
+      if (st?.loading && !d) isLoading = true;
+      else if (!d) noData = true;
+      else if (d.failState) hasFault = true;
     } else if (hasTelemetryUrl(s)) {
       const st = live[s.id]; const d = st?.data;
       if (st?.loading && !d) isLoading = true;
@@ -1888,12 +2109,13 @@ function stationMatchesFilter(stn) {
   if (!activeFilter) return true;
   if (activeFilter === 'online') return stationStatus(stn) === 'ok';
   if (activeFilter === 'offline') {
-    if (stn.txType === 'bt' || hasTelemetryUrl(stn)) return !live[stn.id]?.data;
+    if (stn.txType === 'bt' || stn.txType === 'snmp' || hasTelemetryUrl(stn)) return !live[stn.id]?.data;
     if (stn.streamUrl) { const ss = liveStream[stn.id]; return !!ss && !ss.loading && !ss.online; }
     return false;
   }
   if (activeFilter === 'faults') {
     if (stn.txType === 'bt' && live[stn.id]?.data?.hasAlarms) return true;
+    if (stn.txType === 'snmp' && live[stn.id]?.data?.failState) return true;
     if (hasTelemetryUrl(stn) && live[stn.id]?.data?.faults) return true;
     return (stn.generators||[]).some(gen => { const gd = liveGen[gen.id]?.data; return gd?.fault || gd?.link === false || genModbusFault(gen.id); });
   }
@@ -2329,6 +2551,18 @@ function startPoll(stn) {
   stopPoll(stn.id);
   if (stn.txType === 'bt') {
     if (hasTelemetryUrl(stn)) startBTConn(stn);
+    if (stn.streamUrl) startStreamPoll(stn);
+    (stn.generators||[]).forEach(gen => startGenPoll(gen));
+    return;
+  }
+  if (stn.txType === 'snmp') {
+    if (hasSNMPHost(stn)) {
+      const prev = live[stn.id];
+      live[stn.id] = { data: prev?.data||null, err: null, loading: true, ts: prev?.ts||null };
+      fetchSNMPStn(stn);
+      const ms = (stn.interval||cfg.interval||5)*1000;
+      timers[stn.id] = setInterval(() => fetchSNMPStn(stn), ms);
+    }
     if (stn.streamUrl) startStreamPoll(stn);
     (stn.generators||[]).forEach(gen => startGenPoll(gen));
     return;
@@ -3022,7 +3256,7 @@ function stnRowHtml(s, gId) {
       <svg id="stnchev-${s.id}" class="grp-chev ${collapsed?'':'open'}" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0"><polyline points="6 9 12 15 18 9"/></svg>
       <input type="text" class="inp" value="${esc(s.name)}" onchange="updStn('${s.id}','name',this.value)" onclick="event.stopPropagation()" style="flex:0 0 160px;font-weight:600">
       <span class="pill ${s.enabled?'on':'off'}" style="font-size:9px;padding:2px 7px;flex-shrink:0">${s.enabled?'Ativo':'Pausado'}</span>
-      <span style="font-size:11px;color:var(--muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.url)||'sem URL configurada'}${extras?' · '+extras:''}</span>
+      <span style="font-size:11px;color:var(--muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.txType==='snmp' ? (esc(s.snmpHost)||'sem host configurado') + (s.snmpPort?':'+esc(s.snmpPort):'') : (esc(s.url)||'sem URL configurada')}${extras?' · '+extras:''}</span>
       <button class="btn btn-ico" onclick="event.stopPropagation();testStn('${s.id}')" title="Testar">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
       </button>
@@ -3030,14 +3264,25 @@ function stnRowHtml(s, gId) {
     </div>
     <div id="stnbody-${s.id}" style="display:${collapsed?'none':''};margin-top:10px">
       <div class="stn-row-main">
-        <div><div class="lbl">Tipo</div><select class="inp" onchange="updStn('${s.id}','txType',this.value)"><option value="standard" ${(s.txType||'standard')==='standard'?'selected':''}>Padrão</option><option value="bt" ${s.txType==='bt'?'selected':''}>BT APP10</option></select></div>
+        <div><div class="lbl">Tipo</div><select class="inp" onchange="updStn('${s.id}','txType',this.value);renderStnList()"><option value="standard" ${(s.txType||'standard')==='standard'?'selected':''}>Padrão</option><option value="bt" ${s.txType==='bt'?'selected':''}>BT APP10</option><option value="snmp" ${s.txType==='snmp'?'selected':''}>Synteck RUS (SNMP)</option></select></div>
+        ${s.txType==='snmp' ? `
+        <div><div class="lbl">Host / IP</div><input type="text" class="inp" placeholder="187.0.1.47" value="${esc(s.snmpHost||'')}" onchange="updStn('${s.id}','snmpHost',this.value)"></div>
+        <div><div class="lbl">Porta</div><input type="number" class="inp" placeholder="161" value="${esc(s.snmpPort||'')}" min="1" max="65535" onchange="updStn('${s.id}','snmpPort',+this.value)"></div>
+        ` : `
         <div style="grid-column:span 2"><div class="lbl">URL da Telemetria</div><input type="url" class="inp" value="${esc(s.url)}" onchange="updStn('${s.id}','url',this.value)"></div>
+        `}
         <div><div class="lbl">Intervalo (s)</div><input type="number" class="inp" value="${s.interval||cfg.interval}" min="2" max="120" onchange="updStn('${s.id}','interval',+this.value)" ${s.txType==='bt'?'disabled title="BT usa WebSocket contínuo"':''}></div>
         <div style="padding-top:16px;display:flex;align-items:center;gap:6px">
           <button class="tgl ${s.enabled?'on':''}" onclick="tglStn('${s.id}')"></button>
           <span style="font-size:11px;color:var(--muted)">${s.enabled?'Ativo':'Pausado'}</span>
         </div>
       </div>
+      ${s.txType==='snmp' ? `
+      <div class="stn-row-stream">
+        <div class="lbl">Community SNMP</div>
+        <input type="text" class="inp" placeholder="public" value="${esc(s.snmpCommunity||'')}" onchange="updStn('${s.id}','snmpCommunity',this.value)">
+      </div>
+      ` : ''}
       <div class="stn-row-stream">
         <div class="lbl">URL Streaming (opcional)</div>
         <input type="url" class="inp" placeholder="https://painel.sintonizar.tv.br:10106" value="${esc(s.streamUrl||'')}" onchange="updStn('${s.id}','streamUrl',this.value)">
@@ -3344,7 +3589,9 @@ function testStn(id) {
   let s; for (const gr of cfg.groups) { s=gr.stations.find(s=>s.id===id); if(s) break; }
   if(!s) return;
   live[id]={ data:live[id]?.data||null, err:null, loading:true, ts:live[id]?.ts||null };
-  renderAll(); fetchStn(s);
+  renderAll();
+  if (s.txType === 'snmp') fetchSNMPStn(s);
+  else fetchStn(s);
 }
 
 function saveCfg() {
@@ -4187,7 +4434,7 @@ function init() {
   });
 
   const allStns = cfg.groups.flatMap(g=>g.stations);
-  const hasReal = allStns.some(s=>!s.url.includes('IP:'));
+  const hasReal = allStns.some(s => s.txType==='snmp' ? hasSNMPHost(s) : !s.url.includes('IP:'));
   if (!hasReal || !allStns.length) openCfg();
   cfg.groups.forEach(gr => {
     gr.stations.forEach(s => startPoll(s));
