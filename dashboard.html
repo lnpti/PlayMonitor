@@ -402,6 +402,10 @@ body.dragging-group *{cursor:grabbing!important}
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10"/></svg>
       Relatório
     </button>
+    <button class="btn" onclick="openListenerReport()" title="Relatório de ouvintes (diário/mensal)">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 3 5-8"/></svg>
+      Ouvintes
+    </button>
     <button class="btn" onclick="openRanking()" title="Ranking de ouvintes online">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
       Ranking
@@ -478,6 +482,32 @@ body.dragging-group *{cursor:grabbing!important}
       </button>
     </div>
     <div class="modal-body" id="genReportBody" style="padding:0 16px"></div>
+  </div>
+</div>
+
+<!-- Listener History Report Modal -->
+<div id="listenerReportModal" class="modal-overlay" onclick="if(event.target===this)closeListenerReport()">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-hd">
+      <span class="modal-hd-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        Relatório de Ouvintes
+      </span>
+      <button class="btn" onclick="clearListenerReportForStation()" style="font-size:11px;margin-right:auto">Limpar histórico desta rádio</button>
+      <button class="modal-close" onclick="closeListenerReport()" title="Fechar">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" style="padding:0 16px;display:flex;flex-direction:column">
+      <div style="display:flex;gap:8px;padding:10px 0;flex-wrap:wrap;align-items:center;flex-shrink:0">
+        <select class="inp" id="lrStnSelect" onchange="renderListenerReportBody()" style="flex:1;min-width:180px"></select>
+        <div class="density-toggle">
+          <button type="button" class="density-btn active" id="lrTabDaily" onclick="setListenerReportMode('daily')">Diário</button>
+          <button type="button" class="density-btn" id="lrTabMonthly" onclick="setListenerReportMode('monthly')">Mensal</button>
+        </div>
+      </div>
+      <div id="listenerReportBody" style="overflow-y:auto"></div>
+    </div>
   </div>
 </div>
 
@@ -606,6 +636,140 @@ function startGenRun(genId, genName, parentName, ts) {
 function endGenRun(genId, ts) {
   const run = genRunHistory.find(r => r.genId === genId && r.endTs == null);
   if (run) { run.endTs = ts; saveGenRunHistory(); }
+}
+
+/* ── HISTÓRICO DE OUVINTES (relatório diário/mensal) ──
+   Guarda só um registro agregado por rádio/dia (pico + soma/contagem pra
+   tirar a média), não cada amostra — um ano inteiro de todas as rádios
+   ainda fica pequeno. O "pico" aqui é sempre o maior valor que ESTE app já
+   viu no dia, nunca o campo que o próprio servidor Icecast/Shoutcast
+   reporta (esse só zera quando o servidor reinicia, então não serve pra
+   "pico de hoje"). */
+const LISTENER_HIST_KEY = 'snMon_listenerhist_v1';
+const LISTENER_HIST_RETENTION_DAYS = 400;
+let listenerHistory = {}; // { [stnId]: { [dia 'AAAA-MM-DD']: {peak,sum,count,name} } }
+let listenerHistSaveTimer = null;
+let listenerHistPruneCheck = {};
+
+function loadListenerHistory() {
+  try { listenerHistory = JSON.parse(localStorage.getItem(LISTENER_HIST_KEY)) || {}; } catch(e) { listenerHistory = {}; }
+}
+function saveListenerHistoryNow() {
+  try { localStorage.setItem(LISTENER_HIST_KEY, JSON.stringify(listenerHistory)); } catch(e) {}
+}
+function saveListenerHistoryDebounced() {
+  if (listenerHistSaveTimer) return;
+  listenerHistSaveTimer = setTimeout(() => { listenerHistSaveTimer = null; saveListenerHistoryNow(); }, 5000);
+}
+function localDateStr(d) {
+  d = d || new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function pruneListenerHistory(stnId) {
+  const now = Date.now();
+  if (listenerHistPruneCheck[stnId] && now - listenerHistPruneCheck[stnId] < 24*3600*1000) return;
+  listenerHistPruneCheck[stnId] = now;
+  const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - LISTENER_HIST_RETENTION_DAYS);
+  const cutoffStr = localDateStr(cutoff);
+  const days = listenerHistory[stnId];
+  if (!days) return;
+  for (const day in days) if (day < cutoffStr) delete days[day];
+}
+function recordListenerSample(stnId, stnName, listeners) {
+  if (listeners == null || isNaN(listeners)) return;
+  if (!listenerHistory[stnId]) listenerHistory[stnId] = {};
+  const day = localDateStr();
+  let rec = listenerHistory[stnId][day];
+  if (!rec) rec = listenerHistory[stnId][day] = { peak: 0, sum: 0, count: 0, name: stnName };
+  rec.name = stnName;
+  if (listeners > rec.peak) rec.peak = listeners;
+  rec.sum += listeners;
+  rec.count++;
+  saveListenerHistoryDebounced();
+  pruneListenerHistory(stnId);
+}
+function todaysListenerPeak(stnId) {
+  return listenerHistory[stnId]?.[localDateStr()]?.peak ?? null;
+}
+function listenerDailyRows(stnId, days) {
+  const hist = listenerHistory[stnId] || {};
+  return Object.keys(hist).sort().slice(-(days||30)).reverse().map(day => {
+    const r = hist[day];
+    return { key: day, label: day.split('-').reverse().join('/'), peak: r.peak, avg: r.count ? Math.round(r.sum/r.count) : 0, samples: r.count };
+  });
+}
+function listenerMonthlyRows(stnId) {
+  const hist = listenerHistory[stnId] || {};
+  const months = {};
+  for (const day in hist) {
+    const m = day.slice(0, 7);
+    const r = hist[day];
+    if (!months[m]) months[m] = { peak: 0, sum: 0, count: 0 };
+    months[m].peak = Math.max(months[m].peak, r.peak);
+    months[m].sum += r.sum;
+    months[m].count += r.count;
+  }
+  const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  return Object.keys(months).sort().reverse().map(m => {
+    const [y, mo] = m.split('-');
+    const r = months[m];
+    return { key: m, label: `${MESES[+mo-1]}/${y}`, peak: r.peak, avg: r.count ? Math.round(r.sum/r.count) : 0, samples: r.count };
+  });
+}
+function allListenerStations() {
+  const out = [];
+  cfg.groups.forEach(gr => gr.stations.forEach(s => { if (s.streamUrl) out.push({ id: s.id, name: s.name, groupName: gr.name }); }));
+  return out;
+}
+
+let listenerReportMode = 'daily';
+function setListenerReportMode(mode) {
+  listenerReportMode = mode;
+  document.getElementById('lrTabDaily').classList.toggle('active', mode === 'daily');
+  document.getElementById('lrTabMonthly').classList.toggle('active', mode === 'monthly');
+  renderListenerReportBody();
+}
+function openListenerReport() {
+  const sel = document.getElementById('lrStnSelect');
+  const stations = allListenerStations();
+  const prevVal = sel.value;
+  sel.innerHTML = stations.map(s => `<option value="${s.id}">${esc(s.name)}${s.groupName ? ' ('+esc(s.groupName)+')' : ''}</option>`).join('')
+    || '<option value="">Nenhuma rádio com streaming</option>';
+  if (stations.some(s => s.id === prevVal)) sel.value = prevVal;
+  renderListenerReportBody();
+  document.getElementById('listenerReportModal').classList.add('open');
+}
+function closeListenerReport() { document.getElementById('listenerReportModal').classList.remove('open'); }
+function clearListenerReportForStation() {
+  const stnId = document.getElementById('lrStnSelect')?.value;
+  if (!stnId) return;
+  const s = allListenerStations().find(x => x.id === stnId);
+  if (!confirm(`Apagar todo o histórico de ouvintes de "${s?.name||''}"? Essa ação não pode ser desfeita.`)) return;
+  delete listenerHistory[stnId];
+  saveListenerHistoryNow();
+  renderListenerReportBody();
+}
+function renderListenerReportBody() {
+  const body = document.getElementById('listenerReportBody');
+  if (!body) return;
+  const stnId = document.getElementById('lrStnSelect')?.value;
+  if (!stnId) { body.innerHTML = `<div class="al-empty">Nenhuma rádio com streaming configurado.</div>`; return; }
+  const rows = listenerReportMode === 'daily' ? listenerDailyRows(stnId, 60) : listenerMonthlyRows(stnId);
+  if (!rows.length) { body.innerHTML = `<div class="al-empty">Ainda sem dados suficientes — o histórico começa a ser guardado a partir de agora, com a rádio online.</div>`; return; }
+  body.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr style="text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">
+      <th style="padding:7px 4px">${listenerReportMode === 'daily' ? 'Data' : 'Mês'}</th>
+      <th style="padding:7px 4px;text-align:right">Pico</th>
+      <th style="padding:7px 4px;text-align:right">Média</th>
+      <th style="padding:7px 4px;text-align:right">Amostras</th>
+    </tr></thead>
+    <tbody>${rows.map(r => `<tr style="border-top:1px solid var(--bdr)">
+      <td style="padding:8px 4px">${r.label}</td>
+      <td style="padding:8px 4px;text-align:right;font-weight:800;color:var(--num)">${r.peak}</td>
+      <td style="padding:8px 4px;text-align:right;color:var(--muted)">${r.avg}</td>
+      <td style="padding:8px 4px;text-align:right;color:var(--muted);font-size:11px">${r.samples}</td>
+    </tr>`).join('')}</tbody>
+  </table>`;
 }
 
 function saveAlertState() {
@@ -1815,6 +1979,9 @@ async function fetchStream(stn) {
   } catch(e) {
     const prev = liveStream[stn.id];
     liveStream[stn.id] = { type, online: false, sources: prev?.sources||[], err: e.message||'Falha', loading: false, ts: prev?.ts||null };
+  }
+  if (liveStream[stn.id].online) {
+    recordListenerSample(stn.id, stn.name, liveStream[stn.id].sources?.[0]?.listeners ?? 0);
   }
   evaluateStreamAlerts(stn);
   renderAll();
@@ -3116,7 +3283,9 @@ function computeListenerRanking() {
       rows.push({
         name: stn.name, groupName: gr.name, loading, online,
         listeners: online ? (src?.listeners ?? 0) : 0,
-        peak: src?.listener_peak ?? src?.ListenerPeak ?? null,
+        // pico de HOJE calculado pelo app, não o valor do próprio servidor
+        // (esse só zera quando o Icecast/Shoutcast reinicia).
+        peak: todaysListenerPeak(stn.id),
         bitrate: src?.bitrate ?? src?.Bitrate ?? null,
       });
     });
@@ -3525,6 +3694,7 @@ function init() {
   applyTheme();
   loadAlertState();
   loadGenRunHistory();
+  loadListenerHistory();
   loadGroupLayout();
   loadGroupDensity();
   loadPanelsHidden();
