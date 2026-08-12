@@ -437,8 +437,10 @@ body.dragging-group *{cursor:grabbing!important}
       </button>
     </div>
     <div class="modal-body" style="padding:0 16px;display:flex;flex-direction:column">
-      <div style="display:flex;gap:6px;padding:10px 0;flex-shrink:0">
+      <div style="display:flex;gap:6px;padding:10px 0;flex-shrink:0;flex-wrap:wrap">
         <button class="btn btn-p" id="alTabAll" onclick="setAlertLogTab('all')">Todos</button>
+        <button class="btn" id="alTabTransmitter" onclick="setAlertLogTab('transmitter')">Transmissores</button>
+        <button class="btn" id="alTabGenerator" onclick="setAlertLogTab('generator')">Geradores</button>
         <button class="btn" id="alTabStreaming" onclick="setAlertLogTab('streaming')">Streaming</button>
       </div>
       <div id="alertLogBody" style="overflow-y:auto"></div>
@@ -2947,22 +2949,31 @@ function dismissBannerItem(genId, condKey) {
   renderAlertBanner();
 }
 
+const ALERT_LOG_TABS = {
+  all: { btn: 'alTabAll', label: 'Todos' },
+  transmitter: { btn: 'alTabTransmitter', label: 'Transmissores' },
+  generator: { btn: 'alTabGenerator', label: 'Geradores' },
+  streaming: { btn: 'alTabStreaming', label: 'Streaming' },
+};
+
 let alertLogTab = 'all';
 function setAlertLogTab(tab) {
   alertLogTab = tab;
-  document.getElementById('alTabAll').classList.toggle('btn-p', tab === 'all');
-  document.getElementById('alTabStreaming').classList.toggle('btn-p', tab === 'streaming');
+  for (const key in ALERT_LOG_TABS) {
+    document.getElementById(ALERT_LOG_TABS[key].btn).classList.toggle('btn-p', tab === key);
+  }
   renderAlertLogBody();
 }
 
 function renderAlertLogBody() {
   const body = document.getElementById('alertLogBody');
   if (!body) return;
-  const filtered = alertLogTab === 'streaming'
-    ? eventLog.filter(ev => eventCategory(ev.condKey) === 'streaming')
-    : eventLog;
+  const filtered = alertLogTab === 'all'
+    ? eventLog
+    : eventLog.filter(ev => eventCategory(ev.condKey) === alertLogTab);
   if (!filtered.length) {
-    body.innerHTML = `<div class="al-empty">${alertLogTab === 'streaming' ? 'Nenhum evento de streaming registrado.' : 'Nenhum evento registrado.'}</div>`;
+    const label = ALERT_LOG_TABS[alertLogTab].label;
+    body.innerHTML = `<div class="al-empty">${alertLogTab === 'all' ? 'Nenhum evento registrado.' : `Nenhum evento de ${label.toLowerCase()} registrado.`}</div>`;
     return;
   }
   body.innerHTML = filtered.map(ev => `<div class="al-log-entry">
