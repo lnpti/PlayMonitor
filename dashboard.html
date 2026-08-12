@@ -48,6 +48,25 @@ body{background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,'
 .hd-title{font-size:14px;font-weight:700;letter-spacing:-0.3px}
 .hd-sub{font-size:10px;color:var(--muted)}
 .hd-right{display:flex;align-items:center;gap:8px}
+.hd-group{display:flex;align-items:center;gap:6px}
+.hd-divider{width:1px;height:22px;background:var(--bdr);flex-shrink:0}
+.hd-live{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--muted);white-space:nowrap}
+.hd-live-dot{width:7px;height:7px;border-radius:50%;background:var(--good);box-shadow:0 0 6px var(--good);position:relative;flex-shrink:0}
+.hd-live-dot::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:1.5px solid var(--good);opacity:.55;animation:pulse-ring 2.2s ease-out infinite}
+@media (prefers-reduced-motion: reduce){.hd-live-dot::after{animation:none;display:none}}
+.hd-icogroup{display:flex;border:1px solid var(--bdr2);border-radius:var(--rs);overflow:hidden}
+.hd-icogroup .btn{border:none;border-radius:0}
+.hd-icogroup .btn+.btn{border-left:1px solid var(--bdr)}
+.hd-menu-wrap{position:relative}
+.hd-menu{position:absolute;top:calc(100% + 6px);right:0;background:var(--surf);border:1px solid var(--bdr);border-radius:var(--rs);box-shadow:0 16px 32px -10px rgba(0,0,0,.4);min-width:210px;padding:5px;display:none;flex-direction:column;gap:1px;z-index:150}
+.hd-menu.open{display:flex}
+.hd-menu-item{display:flex;align-items:center;gap:9px;padding:8px 9px;border-radius:7px;font-size:12px;font-weight:600;color:var(--txt);cursor:pointer;background:none;border:none;text-align:left;width:100%;font-family:inherit;transition:background .12s,color .12s}
+.hd-menu-item:hover{background:var(--accent-dim);color:var(--accent)}
+.hd-menu-item svg{flex-shrink:0;opacity:.75}
+.hd-chev{transition:transform .15s}
+.hd-menu-wrap:has(.hd-menu.open) .hd-chev{transform:rotate(180deg)}
+.hd-updot{position:absolute;top:-2px;right:-2px;width:9px;height:9px;border-radius:50%;background:var(--accent);border:2px solid var(--surf);box-shadow:0 0 5px var(--accent)}
+@media(max-width:1050px){.hd-live{display:none}}
 
 /* ─── BUTTONS ─── */
 .btn{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border-radius:var(--rs);border:1px solid var(--bdr2);background:var(--surf2);color:var(--txt);font-size:12px;font-weight:600;cursor:pointer;transition:border-color .15s,background .15s;white-space:nowrap;font-family:inherit}
@@ -399,52 +418,73 @@ body.dragging-group *{cursor:grabbing!important}
     </div>
   </div>
   <div class="hd-right">
-    <span id="globalTs" style="font-size:11px;color:var(--muted)"></span>
-    <span id="updateStatus" style="font-size:11px;color:var(--muted)"></span>
-    <button class="btn" id="updateBtn" onclick="checkForUpdates()" title="Verificar atualizações">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-      Atualizações
-    </button>
-    <button class="btn" onclick="toggleTheme()" title="Alternar tema">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-      Tema
-    </button>
-    <div class="bell-wrap">
-      <button class="btn" id="bellBtn" onclick="toggleAlertLog()" title="Alertas e eventos">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-        Alertas
-      </button>
-      <span class="bell-cnt" id="bellCnt" style="display:none">0</span>
+    <div class="hd-live" id="globalTs" title="Horário da última leitura recebida">
+      <span class="hd-live-dot"></span>
+      <span id="globalTsText">Aguardando dados…</span>
     </div>
-    <button class="btn" onclick="openGenReport()" title="Relatório de operação dos geradores">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10"/></svg>
-      Relatório
-    </button>
-    <button class="btn" onclick="openListenerReport()" title="Relatório de ouvintes (diário/mensal)">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 3 5-8"/></svg>
-      Ouvintes
-    </button>
-    <button class="btn" onclick="openRanking()" title="Ranking de ouvintes online">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-      Ranking
-    </button>
-    <button class="btn" onclick="setAllGroupsDensity('compact')" title="Recolher todos os grupos">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
-      Compactar todos
-    </button>
-    <button class="btn" onclick="setAllGroupsDensity('detailed')" title="Expandir todos os grupos">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
-      Detalhar todos
-    </button>
-    <button class="btn btn-ico" id="sidebarToggleBtn" onclick="toggleSidebarPanel()" title="Mostrar/ocultar painel de grupos">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
-    </button>
-    <button class="btn btn-ico" id="rankingToggleBtn" onclick="toggleRankingPanelVisibility()" title="Mostrar/ocultar painel de ranking">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
-    </button>
-    <button class="btn" onclick="openCfg()">
+
+    <div class="hd-divider"></div>
+
+    <div class="hd-group">
+      <button class="btn btn-ico" onclick="toggleTheme()" title="Alternar tema claro/escuro">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+      </button>
+      <div class="bell-wrap">
+        <button class="btn" id="bellBtn" onclick="toggleAlertLog()" title="Alertas e eventos">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          Alertas
+        </button>
+        <span class="bell-cnt" id="bellCnt" style="display:none">0</span>
+      </div>
+    </div>
+
+    <div class="hd-divider"></div>
+
+    <div class="hd-menu-wrap">
+      <button class="btn" onclick="toggleHdMenu('reports', event)" title="Relatórios e rankings">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        Relatórios
+        <svg class="hd-chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="hd-menu" id="hdMenu_reports">
+        <button class="hd-menu-item" onclick="closeHdMenus();openGenReport()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10"/></svg>
+          Relatório de geradores
+        </button>
+        <button class="hd-menu-item" onclick="closeHdMenus();openListenerReport()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 3 5-8"/></svg>
+          Relatório de ouvintes
+        </button>
+        <button class="hd-menu-item" onclick="closeHdMenus();openRanking()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          Ranking de ouvintes online
+        </button>
+      </div>
+    </div>
+
+    <div class="hd-divider"></div>
+
+    <div class="hd-group">
+      <div class="density-toggle" title="Densidade de todos os grupos">
+        <button type="button" class="density-btn" onclick="setAllGroupsDensity('compact')" title="Compactar todos os grupos">Compactar</button>
+        <button type="button" class="density-btn" onclick="setAllGroupsDensity('detailed')" title="Detalhar todos os grupos">Detalhar</button>
+      </div>
+      <div class="hd-icogroup">
+        <button class="btn btn-ico" id="sidebarToggleBtn" onclick="toggleSidebarPanel()" title="Mostrar/ocultar painel de grupos">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+        </button>
+        <button class="btn btn-ico" id="rankingToggleBtn" onclick="toggleRankingPanelVisibility()" title="Mostrar/ocultar painel de ranking">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="hd-divider"></div>
+
+    <button class="btn" onclick="openCfg()" style="position:relative" title="Configurações">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l-.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       Configurações
+      <span class="hd-updot" id="cfgUpdateDot" style="display:none" title="Atualização disponível"></span>
     </button>
   </div>
 </header>
@@ -575,6 +615,22 @@ body.dragging-group *{cursor:grabbing!important}
       </button>
     </div>
     <div class="modal-body">
+      <div class="grp-cfg" style="padding:10px 12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+        <div style="display:flex;align-items:center;gap:9px">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:.5;flex-shrink:0"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          <div>
+            <div style="font-weight:600">Atualizações</div>
+            <div style="font-size:11px;color:var(--muted)" id="cfgAppVersion">PlayMonitor</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span id="updateStatus" style="font-size:11px;color:var(--muted)"></span>
+          <button class="btn" id="updateBtn" onclick="checkForUpdates()" title="Verificar atualizações">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            Verificar atualizações
+          </button>
+        </div>
+      </div>
       <div class="grp-cfg" id="notifyGlobalCfg">
         <div class="grp-cfg-hd" onclick="toggleNotifyGlobalCfg()" style="cursor:pointer;user-select:none">
           <div style="display:flex;align-items:center;gap:8px;flex:1">
@@ -1222,7 +1278,7 @@ function startBTConn(stn) {
       const json = JSON.parse(e.data);
       if (!json || typeof json !== 'object' || !json.state) return;
       live[stn.id] = { data: parseBTData(json), err: null, loading: false, ts: Date.now() };
-      document.getElementById('globalTs').textContent = 'Última atualização: ' + new Date().toLocaleTimeString('pt-BR');
+      updateGlobalTs();
       renderAll();
     } catch {}
   };
@@ -2176,7 +2232,7 @@ async function fetchStn(stn) {
   }
   evaluateStnConnAlerts(stn);
   renderAll();
-  document.getElementById('globalTs').textContent = 'Última atualização: ' + new Date().toLocaleTimeString('pt-BR');
+  updateGlobalTs();
 }
 
 // ── TRANSMISSOR INACESSÍVEL ── mesmo padrão de debounce (3 tentativas) já
@@ -3317,6 +3373,26 @@ function handleImportFile(e) {
 function applyTheme() { document.documentElement.setAttribute('data-theme', cfg.theme); }
 function toggleTheme() { cfg.theme=cfg.theme==='dark'?'light':'dark'; applyTheme(); saveCfgToStorage(); }
 
+function updateGlobalTs() {
+  const el = document.getElementById('globalTsText');
+  if (el) el.textContent = new Date().toLocaleTimeString('pt-BR');
+}
+
+/* ── Menus suspensos do cabeçalho ── */
+function toggleHdMenu(name, ev) {
+  if (ev) ev.stopPropagation();
+  const menu = document.getElementById('hdMenu_' + name);
+  if (!menu) return;
+  const wasOpen = menu.classList.contains('open');
+  closeHdMenus();
+  if (!wasOpen) menu.classList.add('open');
+}
+function closeHdMenus() {
+  document.querySelectorAll('.hd-menu.open').forEach(m => m.classList.remove('open'));
+}
+document.addEventListener('click', e => { if (!e.target.closest('.hd-menu-wrap')) closeHdMenus(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeHdMenus(); });
+
 /* ── Atualizações (GitHub Releases via electron-updater) ── */
 async function checkForUpdates() {
   const el = document.getElementById('updateStatus');
@@ -3330,6 +3406,8 @@ async function checkForUpdates() {
 }
 
 function renderUpdateStatus(data) {
+  const dot = document.getElementById('cfgUpdateDot');
+  if (dot) dot.style.display = ['available','downloading','downloaded'].includes(data.status) ? '' : 'none';
   const el = document.getElementById('updateStatus');
   if (!el) return;
   switch (data.status) {
@@ -4020,7 +4098,13 @@ function init() {
   renderAlertBanner();
   applyPanelsHidden();
 
-  if (window.updateAPI) window.updateAPI.onStatus(renderUpdateStatus);
+  if (window.updateAPI) {
+    window.updateAPI.onStatus(renderUpdateStatus);
+    window.updateAPI.getAppVersion().then(v => {
+      const el = document.getElementById('cfgAppVersion');
+      if (el && v) el.textContent = 'PlayMonitor v' + v;
+    }).catch(() => {});
+  }
 
   document.getElementById('stnGrid').addEventListener('click', e => {
     const genBar = e.target.closest('.sec-bar-gen');
