@@ -436,7 +436,13 @@ body.dragging-group *{cursor:grabbing!important}
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </div>
-    <div class="modal-body" id="alertLogBody" style="padding:0 16px"></div>
+    <div class="modal-body" style="padding:0 16px;display:flex;flex-direction:column">
+      <div style="display:flex;gap:6px;padding:10px 0;flex-shrink:0">
+        <button class="btn btn-p" id="alTabAll" onclick="setAlertLogTab('all')">Todos</button>
+        <button class="btn" id="alTabStreaming" onclick="setAlertLogTab('streaming')">Streaming</button>
+      </div>
+      <div id="alertLogBody" style="overflow-y:auto"></div>
+    </div>
   </div>
 </div>
 
@@ -1629,8 +1635,37 @@ async function fetchStn(stn) {
     const prev = live[stn.id];
     live[stn.id] = { data: prev?.data||null, err: e.message||'Falha na conexão', loading: false, ts: prev?.ts||null };
   }
+  evaluateStnConnAlerts(stn);
   renderAll();
   document.getElementById('globalTs').textContent = 'Última atualização: ' + new Date().toLocaleTimeString('pt-BR');
+}
+
+// ── TRANSMISSOR INACESSÍVEL ── mesmo padrão de debounce (3 tentativas) já
+// usado pro DSE855 dos geradores. Sem isso, uma rádio offline não gerava
+// nenhum evento/alerta — só aparecia visualmente no card.
+function evaluateStnConnAlerts(stn) {
+  if (!genAlertSt[stn.id]) genAlertSt[stn.id] = { pending:{}, active:{}, fetchFailCount:0, prevData:null };
+  const gs = genAlertSt[stn.id];
+  const st = live[stn.id];
+  const groupName = getStationGroupName(stn.id);
+  const stnLabel = groupName ? `${stn.name} (${groupName})` : stn.name;
+
+  if (st?.err) {
+    gs.fetchFailCount = (gs.fetchFailCount||0) + 1;
+    if (gs.fetchFailCount >= 3 && !gs.active.stnOffline) {
+      gs.active.stnOffline = true;
+      addEvent(stn.id, stn.name, '🔴', 'crit', 'stnOffline', `${stnLabel}: TRANSMISSOR INACESSÍVEL`,
+        `Sem resposta após 3 tentativas. ${st.err}`);
+    }
+  } else {
+    gs.fetchFailCount = 0;
+    if (gs.active.stnOffline) {
+      gs.active.stnOffline = false;
+      addEvent(stn.id, stn.name, '🟢', 'ok', 'stnOffline', `${stnLabel}: Transmissor voltou a responder`);
+    }
+  }
+  updateBell();
+  renderAlertBanner();
 }
 
 function stopPoll(id) {
@@ -2403,6 +2438,12 @@ const NOTIFY_LEVELS = [
   { key: 'ok', label: 'Recuperação (voltou ao normal)' },
 ];
 
+const NOTIFY_CATEGORIES = [
+  { key: 'transmitter', label: 'Transmissor' },
+  { key: 'generator', label: 'Gerador' },
+  { key: 'streaming', label: 'Streaming' },
+];
+
 function updGroupNotify(gId, channel, k, v) {
   const gr = cfg.groups.find(g => g.id === gId);
   if (!gr) return;
@@ -2416,6 +2457,15 @@ function toggleGroupNotifyLevel(gId, channel, level, checked) {
   const set = new Set(n.levels || []);
   if (checked) set.add(level); else set.delete(level);
   n.levels = [...set];
+}
+
+function toggleGroupNotifyCategory(gId, channel, category, checked) {
+  const gr = cfg.groups.find(g => g.id === gId);
+  if (!gr) return;
+  const n = ensureGroupNotify(gr)[channel];
+  const set = new Set(n.categories || []);
+  if (checked) set.add(category); else set.delete(category);
+  n.categories = [...set];
 }
 
 function toggleGroupNotifyEnabled(gId, channel) {
@@ -2433,6 +2483,10 @@ function groupNotifyHtml(gr) {
     <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted)">
       <input type="checkbox" ${(n[channel].levels||[]).includes(lv.key)?'checked':''} onchange="toggleGroupNotifyLevel('${gr.id}','${channel}','${lv.key}',this.checked)"> ${lv.label}
     </label>`).join('');
+  const categoriesHtml = (channel) => NOTIFY_CATEGORIES.map(cat => `
+    <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted)">
+      <input type="checkbox" ${(n[channel].categories||[]).includes(cat.key)?'checked':''} onchange="toggleGroupNotifyCategory('${gr.id}','${channel}','${cat.key}',this.checked)"> ${cat.label}
+    </label>`).join('');
   return `<div class="grp-cfg" style="margin-top:8px;background:var(--surf2)">
     <div class="grp-cfg-hd" onclick="toggleNotifyGrp('${gr.id}')" style="cursor:pointer;user-select:none;padding:8px 10px">
       <div style="display:flex;align-items:center;gap:8px;flex:1">
@@ -2447,6 +2501,9 @@ function groupNotifyHtml(gr) {
           <span style="font-size:12px;font-weight:600">E-mail</span>
         </div>
         <input type="text" class="inp" placeholder="Destinatários, separados por vírgula" value="${esc(n.email.recipients||'')}" onchange="updGroupNotify('${gr.id}','email','recipients',this.value)" style="width:100%;margin-bottom:6px">
+        <div style="font-size:10px;color:var(--muted);margin-bottom:3px">Tipos de alerta</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px">${categoriesHtml('email')}</div>
+        <div style="font-size:10px;color:var(--muted);margin-bottom:3px">Níveis</div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px">${levelsHtml('email')}</div>
         <button class="btn" style="font-size:11px" onclick="testGroupNotify('${gr.id}','email')">Testar</button>
       </div>
@@ -2456,6 +2513,9 @@ function groupNotifyHtml(gr) {
           <span style="font-size:12px;font-weight:600">Telegram</span>
         </div>
         <input type="text" class="inp" placeholder="Chat ID" autocomplete="off" value="${esc(n.telegram.chatId||'')}" onchange="updGroupNotify('${gr.id}','telegram','chatId',this.value)" style="width:100%;margin-bottom:6px">
+        <div style="font-size:10px;color:var(--muted);margin-bottom:3px">Tipos de alerta</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px">${categoriesHtml('telegram')}</div>
+        <div style="font-size:10px;color:var(--muted);margin-bottom:3px">Níveis</div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px">${levelsHtml('telegram')}</div>
         <button class="btn" style="font-size:11px" onclick="testGroupNotify('${gr.id}','telegram')">Testar</button>
       </div>
@@ -2770,7 +2830,7 @@ function addEvent(genId, genName, icon, level, condKey, msg, detail) {
   updateBell();
   renderAlertBanner();
   if (document.getElementById('alertLogModal')?.classList.contains('open')) renderAlertLogBody();
-  notifyGroupOfEvent(genId, level, msg, detail);
+  notifyGroupOfEvent(genId, level, condKey, msg, detail);
 }
 
 /* ── Notificações por e-mail (SMTP) e Telegram, por grupo/local ── */
@@ -2788,10 +2848,24 @@ function getNotifyGroupFor(id) {
   return null;
 }
 
+const NOTIFY_ALL_CATEGORIES = ['transmitter','generator','streaming'];
+// Mapeia o condKey de cada evento pra uma das 3 categorias que a pessoa
+// escolhe receber ou não. streamDown/stnOffline são específicos; qualquer
+// outro condKey (inclusive null, usado nos eventos de comando manual e
+// "sistema normal") vem de gerador.
+function eventCategory(condKey) {
+  if (condKey === 'streamDown') return 'streaming';
+  if (condKey === 'stnOffline') return 'transmitter';
+  return 'generator';
+}
+
 function ensureGroupNotify(gr) {
   if (!gr.notify) gr.notify = {};
-  if (!gr.notify.email) gr.notify.email = { enabled: false, recipients: '', levels: ['crit','high'] };
-  if (!gr.notify.telegram) gr.notify.telegram = { enabled: false, chatId: '', levels: ['crit','high'] };
+  if (!gr.notify.email) gr.notify.email = { enabled: false, recipients: '', levels: ['crit','high'], categories: [...NOTIFY_ALL_CATEGORIES] };
+  if (!gr.notify.telegram) gr.notify.telegram = { enabled: false, chatId: '', levels: ['crit','high'], categories: [...NOTIFY_ALL_CATEGORIES] };
+  // configs salvas antes desse campo existir — assume "recebe tudo" (comportamento anterior)
+  if (!gr.notify.email.categories) gr.notify.email.categories = [...NOTIFY_ALL_CATEGORIES];
+  if (!gr.notify.telegram.categories) gr.notify.telegram.categories = [...NOTIFY_ALL_CATEGORIES];
   return gr.notify;
 }
 
@@ -2815,23 +2889,24 @@ async function sendEmailAlert(recipients, subject, text) {
   } catch(e) { console.error('[email] falha ao enviar:', e.message); }
 }
 
-function notifyGroupOfEvent(genId, level, msg, detail) {
+function notifyGroupOfEvent(genId, level, condKey, msg, detail) {
   const gr = getNotifyGroupFor(genId);
   if (!gr) return;
   const notify = ensureGroupNotify(gr);
+  const category = eventCategory(condKey);
   const text = detail ? `${msg}\n${detail}` : msg;
 
-  if (notify.email.enabled && (notify.email.levels||[]).includes(level)) {
+  if (notify.email.enabled && (notify.email.levels||[]).includes(level) && (notify.email.categories||[]).includes(category)) {
     const recipients = (notify.email.recipients||'').split(',').map(s=>s.trim()).filter(Boolean);
     if (recipients.length) sendEmailAlert(recipients, msg, text);
   }
-  if (notify.telegram.enabled && (notify.telegram.levels||[]).includes(level) && notify.telegram.chatId) {
+  if (notify.telegram.enabled && (notify.telegram.levels||[]).includes(level) && (notify.telegram.categories||[]).includes(category) && notify.telegram.chatId) {
     sendTelegramAlert(notify.telegram.chatId, text);
   }
 }
 
 function updateBell() {
-  const bellKeys = ['dse855Offline','gridDown','genFailedToStart','genNoVoltage','controllerAlarm','modbusAlarm','moduleLink','battLow','oilLow','streamDown'];
+  const bellKeys = ['dse855Offline','gridDown','genFailedToStart','genNoVoltage','controllerAlarm','modbusAlarm','moduleLink','battLow','oilLow','streamDown','stnOffline'];
   const active = Object.values(genAlertSt).some(st =>
     Object.entries(st.active).some(([k,v]) => v && bellKeys.includes(k))
   );
@@ -2872,14 +2947,25 @@ function dismissBannerItem(genId, condKey) {
   renderAlertBanner();
 }
 
+let alertLogTab = 'all';
+function setAlertLogTab(tab) {
+  alertLogTab = tab;
+  document.getElementById('alTabAll').classList.toggle('btn-p', tab === 'all');
+  document.getElementById('alTabStreaming').classList.toggle('btn-p', tab === 'streaming');
+  renderAlertLogBody();
+}
+
 function renderAlertLogBody() {
   const body = document.getElementById('alertLogBody');
   if (!body) return;
-  if (!eventLog.length) {
-    body.innerHTML = `<div class="al-empty">Nenhum evento registrado.</div>`;
+  const filtered = alertLogTab === 'streaming'
+    ? eventLog.filter(ev => eventCategory(ev.condKey) === 'streaming')
+    : eventLog;
+  if (!filtered.length) {
+    body.innerHTML = `<div class="al-empty">${alertLogTab === 'streaming' ? 'Nenhum evento de streaming registrado.' : 'Nenhum evento registrado.'}</div>`;
     return;
   }
-  body.innerHTML = eventLog.map(ev => `<div class="al-log-entry">
+  body.innerHTML = filtered.map(ev => `<div class="al-log-entry">
     <span class="al-log-icon">${ev.icon}</span>
     <div class="al-log-body">
       <div class="al-log-msg">${esc(ev.msg)}</div>
