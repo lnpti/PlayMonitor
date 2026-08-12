@@ -795,6 +795,24 @@ function recordListenerSample(stnId, stnName, listeners) {
   hr.count++;
   saveListenerHistoryDebounced();
   pruneListenerHistory(stnId);
+  refreshListenerReportIfShowing(stnId);
+}
+// Mantém o Relatório de Ouvintes "vivo" enquanto está aberto: cada nova
+// amostra atualiza o gráfico por hora (e, no modo Diário, também o gráfico
+// e a tabela) sem precisar fechar/reabrir o relatório. Debounced pra não
+// re-renderizar o modal inteiro a cada amostra quando várias rádios
+// reportam quase juntas.
+let lrLiveRefreshTimer = null;
+function refreshListenerReportIfShowing(stnId) {
+  const modal = document.getElementById('listenerReportModal');
+  if (!modal || !modal.classList.contains('open')) return;
+  if (document.getElementById('lrStnSelect')?.value !== stnId) return;
+  if (lrLiveRefreshTimer) return;
+  lrLiveRefreshTimer = setTimeout(() => {
+    lrLiveRefreshTimer = null;
+    if (listenerReportMode === 'daily') { renderListenerReportBody(); return; }
+    if (document.getElementById('lrHourDate')?.value === localDateStr()) renderListenerHourlyChart();
+  }, 800);
 }
 function todaysListenerPeak(stnId) {
   return listenerHistory[stnId]?.[localDateStr()]?.peak ?? null;
