@@ -365,6 +365,7 @@ body.dragging-group *{cursor:grabbing!important}
 .chart-tooltip-key{display:flex;align-items:center;gap:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}
 .chart-tooltip-dash{width:9px;height:2px;flex-shrink:0}
 .chart-tooltip-val{font-weight:800;color:var(--num);font-variant-numeric:tabular-nums;flex-shrink:0}
+.lr-row-clickable:hover{background:var(--accent-dim) !important}
 .al-strip-crit{background:var(--crit-bg);border:1px solid color-mix(in srgb, var(--crit) 40%, transparent);border-left:3px solid var(--crit)}
 .al-strip-high{background:var(--warn-bg);border:1px solid color-mix(in srgb, var(--warn) 40%, transparent);border-left:3px solid var(--warn)}
 .al-strip-info{background:var(--accent-dim);border:1px solid color-mix(in srgb, var(--accent) 40%, transparent);border-left:3px solid var(--accent)}
@@ -532,6 +533,13 @@ body.dragging-group *{cursor:grabbing!important}
           <div class="chart-card-title" id="lrChartStnTitle">Rádio selecionada</div>
           <div id="lrChartStn"></div>
         </div>
+        <div class="chart-card">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:6px">
+            <div class="chart-card-title" id="lrChartHourTitle" style="margin-bottom:0">Ouvintes por hora</div>
+            <input type="date" class="inp" id="lrHourDate" onchange="renderListenerHourlyChart()" style="width:150px;height:28px">
+          </div>
+          <div id="lrChartHour"></div>
+        </div>
         <div id="listenerReportBody"></div>
       </div>
     </div>
@@ -674,7 +682,11 @@ function endGenRun(genId, ts) {
    "pico de hoje"). */
 const LISTENER_HIST_KEY = 'snMon_listenerhist_v1';
 const LISTENER_HIST_RETENTION_DAYS = 400;
-let listenerHistory = {}; // { [stnId]: { [dia 'AAAA-MM-DD']: {peak,sum,count,name} } }
+// Detalhe por hora custa ~24x mais espaço que o agregado diário, então fica
+// só um tempo mais curto — o suficiente pra "que horas o pico costuma
+// acontecer hoje/essa semana", sem inflar o histórico de meses/ano.
+const LISTENER_HOURLY_RETENTION_DAYS = 45;
+let listenerHistory = {}; // { [stnId]: { [dia 'AAAA-MM-DD']: {peak,sum,count,name,hourly:{['00'..'23']:{peak,sum,count}}} } }
 let listenerHistSaveTimer = null;
 let listenerHistPruneCheck = {};
 
@@ -698,25 +710,48 @@ function pruneListenerHistory(stnId) {
   listenerHistPruneCheck[stnId] = now;
   const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - LISTENER_HIST_RETENTION_DAYS);
   const cutoffStr = localDateStr(cutoff);
+  const hourlyCutoff = new Date(); hourlyCutoff.setDate(hourlyCutoff.getDate() - LISTENER_HOURLY_RETENTION_DAYS);
+  const hourlyCutoffStr = localDateStr(hourlyCutoff);
   const days = listenerHistory[stnId];
   if (!days) return;
-  for (const day in days) if (day < cutoffStr) delete days[day];
+  for (const day in days) {
+    if (day < cutoffStr) { delete days[day]; continue; }
+    if (day < hourlyCutoffStr && days[day].hourly) delete days[day].hourly;
+  }
 }
 function recordListenerSample(stnId, stnName, listeners) {
   if (listeners == null || isNaN(listeners)) return;
   if (!listenerHistory[stnId]) listenerHistory[stnId] = {};
-  const day = localDateStr();
+  const now = new Date();
+  const day = localDateStr(now);
   let rec = listenerHistory[stnId][day];
-  if (!rec) rec = listenerHistory[stnId][day] = { peak: 0, sum: 0, count: 0, name: stnName };
+  if (!rec) rec = listenerHistory[stnId][day] = { peak: 0, sum: 0, count: 0, name: stnName, hourly: {} };
+  if (!rec.hourly) rec.hourly = {};
   rec.name = stnName;
   if (listeners > rec.peak) rec.peak = listeners;
   rec.sum += listeners;
   rec.count++;
+  const hKey = String(now.getHours()).padStart(2, '0');
+  let hr = rec.hourly[hKey];
+  if (!hr) hr = rec.hourly[hKey] = { peak: 0, sum: 0, count: 0 };
+  if (listeners > hr.peak) hr.peak = listeners;
+  hr.sum += listeners;
+  hr.count++;
   saveListenerHistoryDebounced();
   pruneListenerHistory(stnId);
 }
 function todaysListenerPeak(stnId) {
   return listenerHistory[stnId]?.[localDateStr()]?.peak ?? null;
+}
+function stationHourlyRows(stnId, dayKey) {
+  const hourly = listenerHistory[stnId]?.[dayKey]?.hourly || {};
+  const out = [];
+  for (let h = 0; h < 24; h++) {
+    const hKey = String(h).padStart(2, '0');
+    const r = hourly[hKey];
+    out.push({ key: hKey, peak: r ? r.peak : null, avg: r && r.count ? Math.round(r.sum / r.count) : null, samples: r ? r.count : 0 });
+  }
+  return out;
 }
 function listenerDailyRows(stnId, days) {
   const hist = listenerHistory[stnId] || {};
@@ -757,11 +792,13 @@ const CHART_CAT_DARK  = ['#3987e5','#d95926','#199e70','#c98500','#d55181','#008
 function chartCatColor(i) { return (cfg.theme === 'dark' ? CHART_CAT_DARK : CHART_CAT_LIGHT)[i % 8]; }
 const CHART_MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 function chartKeyLabelFull(key, mode) {
+  if (mode === 'hourly') return key + 'h';
   if (mode === 'daily') return key.split('-').reverse().join('/');
   const [y, mo] = key.split('-');
   return `${CHART_MESES[+mo-1]}/${y}`;
 }
 function chartKeyLabelShort(key, mode) {
+  if (mode === 'hourly') return key + 'h';
   if (mode === 'daily') return key.slice(8) + '/' + key.slice(5,7);
   const [y, mo] = key.split('-');
   return `${CHART_MESES[+mo-1]}/${y.slice(2)}`;
@@ -812,6 +849,16 @@ function individualListenerSeries(stnId, mode) {
     ],
   };
 }
+function hourlyListenerSeries(stnId, dayKey) {
+  const rows = stationHourlyRows(stnId, dayKey);
+  return {
+    keys: rows.map(r => r.key),
+    series: [
+      { name: 'Pico', color: 'var(--num)', values: rows.map(r => r.peak) },
+      { name: 'Média', color: 'var(--muted)', values: rows.map(r => r.avg) },
+    ],
+  };
+}
 function renderTrendChart(container, keys, series, opts) {
   opts = opts || {};
   const mode = opts.mode || 'daily';
@@ -853,7 +900,8 @@ function renderTrendChart(container, keys, series, opts) {
     }
   }
 
-  let pathsSvg = '', dotsSvg = '', endLblSvg = '';
+  let pathsSvg = '', dotsSvg = '';
+  const endLabelData = [];
   series.forEach(s => {
     let d = '', open = false, lastIdx = -1;
     s.values.forEach((v, i) => {
@@ -867,9 +915,18 @@ function renderTrendChart(container, keys, series, opts) {
     if (lastIdx >= 0) {
       const x = xAt(lastIdx), y = yAt(s.values[lastIdx]);
       dotsSvg += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4" fill="${s.color}" stroke="var(--surf2)" stroke-width="2"/>`;
-      if (showEndLbl) endLblSvg += `<text class="end-lbl" x="${(x+8).toFixed(1)}" y="${(y+3.5).toFixed(1)}">${esc(s.name)}</text>`;
+      if (showEndLbl) endLabelData.push({ x: x + 8, y, name: s.name });
     }
   });
+  // Quando as linhas convergem no fim, os rótulos diretos colidem — em vez de
+  // empilhar texto ilegível, afasta verticalmente mantendo a ordem (a
+  // legenda abaixo do gráfico já garante a identidade em qualquer caso).
+  endLabelData.sort((a, b) => a.y - b.y);
+  const endLblMinGap = 11;
+  for (let i = 1; i < endLabelData.length; i++) {
+    if (endLabelData[i].y - endLabelData[i-1].y < endLblMinGap) endLabelData[i].y = endLabelData[i-1].y + endLblMinGap;
+  }
+  const endLblSvg = endLabelData.map(l => `<text class="end-lbl" x="${l.x.toFixed(1)}" y="${(l.y+3.5).toFixed(1)}">${esc(l.name)}</text>`).join('');
   const hoverDotsSvg = series.map((s, si) => `<circle class="hv-dot hv-dot-${si}" r="4.5" fill="${s.color}" stroke="var(--surf2)" stroke-width="2" opacity="0"/>`).join('');
 
   const chartId = 'ch' + Math.random().toString(36).slice(2, 9);
@@ -947,10 +1004,33 @@ function openListenerReport() {
   sel.innerHTML = stations.map(s => `<option value="${s.id}">${esc(s.name)}${s.groupName ? ' ('+esc(s.groupName)+')' : ''}</option>`).join('')
     || '<option value="">Nenhuma rádio com streaming</option>';
   if (stations.some(s => s.id === prevVal)) sel.value = prevVal;
+  const dateInp = document.getElementById('lrHourDate');
+  if (dateInp) {
+    const todayStr = localDateStr();
+    dateInp.max = todayStr;
+    if (!dateInp.value) dateInp.value = todayStr;
+  }
   renderListenerReportBody();
   document.getElementById('listenerReportModal').classList.add('open');
 }
 function closeListenerReport() { document.getElementById('listenerReportModal').classList.remove('open'); }
+function selectListenerHourDay(dayKey) {
+  const inp = document.getElementById('lrHourDate');
+  if (inp) inp.value = dayKey;
+  renderListenerReportBody();
+}
+function renderListenerHourlyChart() {
+  const stnId = document.getElementById('lrStnSelect')?.value;
+  const dayKey = document.getElementById('lrHourDate')?.value;
+  const el = document.getElementById('lrChartHour');
+  const titleEl = document.getElementById('lrChartHourTitle');
+  const stnInfo = allListenerStations().find(x => x.id === stnId);
+  if (titleEl) titleEl.textContent = (stnInfo && dayKey) ? `${stnInfo.name} — ouvintes por hora (${chartKeyLabelFull(dayKey, 'daily')})` : 'Ouvintes por hora';
+  if (!el) return;
+  if (!stnId || !dayKey) { el.innerHTML = ''; return; }
+  const { keys, series } = hourlyListenerSeries(stnId, dayKey);
+  renderTrendChart(el, keys, series, { mode: 'hourly', emptyMsg: 'Sem amostras registradas nesse dia (rádio offline nesse período, ou fora da janela de detalhe por hora do histórico).' });
+}
 function clearListenerReportForStation() {
   const stnId = document.getElementById('lrStnSelect')?.value;
   if (!stnId) return;
@@ -985,17 +1065,21 @@ function renderListenerReportBody() {
     }
   }
 
+  renderListenerHourlyChart();
+
   if (!stnId) { body.innerHTML = `<div class="al-empty">Nenhuma rádio com streaming configurado.</div>`; return; }
   const rows = listenerReportMode === 'daily' ? listenerDailyRows(stnId, 60) : listenerMonthlyRows(stnId);
   if (!rows.length) { body.innerHTML = `<div class="al-empty">Ainda sem dados suficientes — o histórico começa a ser guardado a partir de agora, com a rádio online.</div>`; return; }
+  const selDate = document.getElementById('lrHourDate')?.value;
+  const isDaily = listenerReportMode === 'daily';
   body.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:12px">
     <thead><tr style="text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">
-      <th style="padding:7px 4px">${listenerReportMode === 'daily' ? 'Data' : 'Mês'}</th>
+      <th style="padding:7px 4px">${isDaily ? 'Data' : 'Mês'}</th>
       <th style="padding:7px 4px;text-align:right">Pico</th>
       <th style="padding:7px 4px;text-align:right">Média</th>
       <th style="padding:7px 4px;text-align:right">Amostras</th>
     </tr></thead>
-    <tbody>${rows.map(r => `<tr style="border-top:1px solid var(--bdr)">
+    <tbody>${rows.map(r => `<tr style="border-top:1px solid var(--bdr);${isDaily ? 'cursor:pointer' : ''}${isDaily && r.key === selDate ? ';background:var(--accent-dim)' : ''}" ${isDaily ? `class="lr-row-clickable" onclick="selectListenerHourDay('${r.key}')" title="Ver ouvintes por hora nesse dia"` : ''}>
       <td style="padding:8px 4px">${r.label}</td>
       <td style="padding:8px 4px;text-align:right;font-weight:800;color:var(--num)">${r.peak}</td>
       <td style="padding:8px 4px;text-align:right;color:var(--muted)">${r.avg}</td>
