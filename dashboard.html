@@ -3082,7 +3082,7 @@ function renderGenSection(gen, gs, opts = {}) {
   const nv = (v, dec=1) => v != null ? parseFloat(v).toFixed(dec) : '—';
   const vCls = v => { if (v==null) return 'n'; const dv=Math.abs(v-220)/220*100; return dv>15?'cr':dv>8?'wn':'ok'; };
   const battCls = v => v==null?'n':v<11.5?'cr':v<12.5?'wn':'ok';
-  const fuelCls = v => v==null?'n':v<15?'cr':v<30?'wn':'ok';
+  const fuelCls = v => v==null?'n':v<30?'cr':v<50?'wn':'ok';
 
   // ── Métricas rápidas (sempre visíveis)
   const quickStats = [
@@ -3742,7 +3742,10 @@ const ALERT_DELAYS = {
   battLow: 30000,
   genStopped: 3000,
   oilLow: 8000,
+  fuelWarn: 10000,
+  fuelCrit: 10000,
 };
+const FUEL_CRIT_REPEAT_MS = 15 * 60 * 1000; // reenvia o alerta crítico de combustível a cada 15min enquanto <15%
 
 function addEvent(genId, genName, icon, level, condKey, msg, detail) {
   const id = `${Date.now()}-${Math.random().toString(36).slice(2,7)}`;
@@ -4044,7 +4047,7 @@ function renderRankingPanel() {
 }
 
 function initGenAlertSt(genId) {
-  if (!genAlertSt[genId]) genAlertSt[genId] = { pending:{}, active:{}, fetchFailCount:0, prevData:null };
+  if (!genAlertSt[genId]) genAlertSt[genId] = { pending:{}, active:{}, fetchFailCount:0, prevData:null, lastFuelCritNotify:0 };
 }
 
 function setPendingAlert(genId, key, delay, fn) {
@@ -4371,6 +4374,63 @@ function evaluateGenAlerts(gen, gs) {
     if (st.active.oilLow) {
       st.active.oilLow = false;
       addEvent(gId, gName, '🟢', 'ok', 'oilLow', `${genLabel}: Pressão de óleo normalizada (motor parado)`);
+    }
+  }
+
+  // ── COMBUSTÍVEL (< 50% aviso, < 30% crítico) ──
+  // Crítico tem prioridade sobre aviso — indo de >=50% direto pra <30% não
+  // faz sentido acender os dois. Abaixo de 15% o alerta crítico se repete a
+  // cada 15min (FUEL_CRIT_REPEAT_MS) enquanto continuar assim: é o único
+  // alerta do app que se repete de propósito, porque tanque baixo é uma
+  // situação que só piora sozinha com o tempo e o operador pode não ver a
+  // primeira notificação a tempo de agir.
+  if (d.fuel != null) {
+    if (d.fuel < 30) {
+      clearPendingAlert(gId, 'fuelWarn');
+      if (st.active.fuelWarn) st.active.fuelWarn = false;
+
+      if (!st.pending.fuelCrit && !st.active.fuelCrit) {
+        setPendingAlert(gId, 'fuelCrit', ALERT_DELAYS.fuelCrit, () => {
+          const curr = liveGen[gId]?.data;
+          if (curr && curr.fuel != null && curr.fuel < 30) {
+            genAlertSt[gId].active.fuelCrit = true;
+            genAlertSt[gId].lastFuelCritNotify = Date.now();
+            addEvent(gId, gName, '🚨', 'crit', 'fuelCrit', `${genLabel}: COMBUSTÍVEL CRÍTICO — ${curr.fuel}%`,
+              'Nível abaixo de 30%.');
+          }
+        });
+      } else if (st.active.fuelCrit && d.fuel < 15) {
+        const now = Date.now();
+        if (now - (st.lastFuelCritNotify||0) >= FUEL_CRIT_REPEAT_MS) {
+          st.lastFuelCritNotify = now;
+          addEvent(gId, gName, '🚨', 'crit', 'fuelCrit', `${genLabel}: COMBUSTÍVEL CRÍTICO — ${d.fuel}%`,
+            'Nível abaixo de 15% — alerta repetido a cada 15 minutos até normalizar.');
+        }
+      }
+    } else {
+      clearPendingAlert(gId, 'fuelCrit');
+      if (st.active.fuelCrit) {
+        st.active.fuelCrit = false;
+        addEvent(gId, gName, '🟢', 'ok', 'fuelCrit', `${genLabel}: Combustível saiu do nível crítico — ${d.fuel}%`);
+      }
+
+      if (d.fuel < 50) {
+        if (!st.pending.fuelWarn && !st.active.fuelWarn)
+          setPendingAlert(gId, 'fuelWarn', ALERT_DELAYS.fuelWarn, () => {
+            const curr = liveGen[gId]?.data;
+            if (curr && curr.fuel != null && curr.fuel < 50) {
+              genAlertSt[gId].active.fuelWarn = true;
+              addEvent(gId, gName, '⚠️', 'high', 'fuelWarn', `${genLabel}: Combustível baixo — ${curr.fuel}%`,
+                'Nível abaixo de 50%.');
+            }
+          });
+      } else {
+        clearPendingAlert(gId, 'fuelWarn');
+        if (st.active.fuelWarn) {
+          st.active.fuelWarn = false;
+          addEvent(gId, gName, '🟢', 'ok', 'fuelWarn', `${genLabel}: Combustível normalizado — ${d.fuel}%`);
+        }
+      }
     }
   }
 
