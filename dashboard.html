@@ -1932,6 +1932,7 @@ function renderSNMPCard(stn, st, opts = {}) {
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:10px">
+        ${d ? `<span class="rf-badge ${d.powerState==='Ligado'?'on':'off'}">● RF ${d.powerState==='Ligado'?'ON':'OFF'}</span>` : ''}
         ${err&&d ? `<span style="color:var(--warn);font-size:10px;display:inline-flex;align-items:center;gap:4px">${icoWarnTriangle} Falha na atualização</span>` : ''}
         <svg id="cchev-${stn.id}" class="grp-chev${cardCollapsed[stn.id]?'':' open'}" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
       </div>
@@ -1961,7 +1962,7 @@ function renderCardCompact(stn, st) {
     const d = st?.data;
     const cls = !d ? '' : d.failState ? 'cr' : 'ok';
     metricHtml = `<span class="row-compact-metric ${cls}">${d?.fwd != null ? (d.fwd/1000).toFixed(2) + ' kW' : '—'}</span>`;
-    extraBadge = d ? miniPill(d.failState ? 'off' : 'on', d.failState ? 'FALHA' : 'OK') : '';
+    extraBadge = d ? miniPill(d.powerState === 'Ligado' ? 'on' : 'off', 'RF ' + (d.powerState === 'Ligado' ? 'ON' : 'OFF')) : '';
   } else if (hasTelemetryUrl(stn)) {
     const d = st?.data;
     const cls = d ? stClass(pwrSt(d)) : '';
