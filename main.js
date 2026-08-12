@@ -265,7 +265,12 @@ function createWindow() {
 
   Menu.setApplicationMenu(null);
 
-  mainWindow.loadFile('dashboard.html');
+  // Limpa só o cache HTTP (nunca localStorage/config) antes de carregar —
+  // sem isso, o Chromium às vezes serve uma cópia em cache do dashboard.html
+  // mesmo depois de editado, mesmo reabrindo o app do zero.
+  mainWindow.webContents.session.clearCache().finally(() => {
+    mainWindow.loadFile('dashboard.html');
+  });
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
