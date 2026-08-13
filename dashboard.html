@@ -295,6 +295,11 @@ body.dragging-group *{cursor:grabbing!important}
 .sidebar.panel-hidden,.ranking-panel.panel-hidden{display:none}
 .btn-ico.panel-off{opacity:.5}
 .sb-hd{font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:700;padding:2px 9px 9px}
+.sb-search{position:relative;margin:0 1px 9px;flex-shrink:0}
+.sb-search svg{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none}
+.sb-search-inp{width:100%;height:30px;padding:0 9px 0 28px;border-radius:var(--rs);border:1px solid var(--bdr2);background:var(--surf2);color:var(--txt);font-size:11px;font-family:inherit}
+.sb-search-inp:focus{outline:none;border-color:var(--accent)}
+.sb-search-inp::placeholder{color:var(--muted)}
 .sb-empty{padding:10px 9px;color:var(--muted);font-size:11px;line-height:1.5}
 .sb-item{display:flex;align-items:center;gap:9px;padding:9px;min-height:38px;border-radius:var(--rs);cursor:pointer;margin-bottom:3px;border:1px solid transparent;transition:background .15s,border-color .15s}
 .sb-item:hover{background:var(--accent-dim);border-color:var(--accent)}
@@ -339,8 +344,10 @@ body.dragging-group *{cursor:grabbing!important}
 
 @media(max-width:900px){
   .app-layout{flex-direction:column}
-  .sidebar{position:static;width:100%;max-height:none;display:flex;gap:6px;overflow-x:auto;overflow-y:hidden;border-right:none;border-bottom:1px solid var(--bdr);padding:8px}
+  .sidebar{position:static;width:100%;max-height:none;display:flex;overflow-x:auto;overflow-y:hidden;border-right:none;border-bottom:1px solid var(--bdr);padding:8px}
   .sb-hd{display:none}
+  .sb-search{display:none}
+  #sidebarList{display:flex;gap:6px}
   .sb-item{flex-shrink:0;min-width:120px;margin-bottom:0}
 }
 
@@ -505,7 +512,14 @@ body.dragging-group *{cursor:grabbing!important}
 </header>
 
 <div class="app-layout">
-  <nav class="sidebar" id="sidebar"></nav>
+  <nav class="sidebar" id="sidebar">
+    <div class="sb-hd">Locais</div>
+    <div class="sb-search">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" id="sidebarSearchInp" class="sb-search-inp" placeholder="Buscar local ou rádio..." oninput="setSidebarSearch(this.value)">
+    </div>
+    <div id="sidebarList"></div>
+  </nav>
   <div class="main">
     <div class="summary-bar" id="summaryBar"></div>
     <div id="alertBanner" class="alert-banner"></div>
@@ -2979,12 +2993,26 @@ function stationMatchesFilter(stn) {
 }
 
 /* ── SIDEBAR (navegação entre locais) ── */
+// Busca fica em memória, não persiste — reseta a cada abertura do app
+// (igual ao filtro da barra de resumo). A caixa de busca em si é HTML
+// estático (fora do que renderSidebar() substitui), senão cada tecla
+// digitada recriaria o <input> e derrubaria o foco no meio da digitação.
+let sidebarSearchQuery = '';
+function setSidebarSearch(v) {
+  sidebarSearchQuery = v;
+  renderSidebar();
+}
 function renderSidebar() {
-  const el = document.getElementById('sidebar');
-  if (!el) return;
-  if (!cfg.groups.length) { setHtmlIfChanged(el, 'sidebar', '<div class="sb-empty">Nenhum local configurado.</div>'); return; }
+  const listEl = document.getElementById('sidebarList');
+  if (!listEl) return;
+  if (!cfg.groups.length) { setHtmlIfChanged(listEl, 'sidebarList', '<div class="sb-empty">Nenhum local configurado.</div>'); return; }
   const dotCls = { ok:'ok', warn:'wn', err:'cr', loading:'n' };
-  const items = cfg.groups.map(gr => {
+  const q = sidebarSearchQuery.trim().toLowerCase();
+  const groups = q
+    ? cfg.groups.filter(gr => gr.name.toLowerCase().includes(q) || (gr.stations||[]).some(s => (s.name||'').toLowerCase().includes(q)))
+    : cfg.groups;
+  if (!groups.length) { setHtmlIfChanged(listEl, 'sidebarList', `<div class="sb-empty">Nenhum resultado para "${esc(sidebarSearchQuery.trim())}".</div>`); return; }
+  const items = groups.map(gr => {
     const { worst, count } = groupWorstStatus(gr);
     return `<div class="sb-item" data-group="${gr.id}" tabindex="0">
       <span class="sb-dot ${dotCls[worst]||'n'}"></span>
@@ -2992,7 +3020,7 @@ function renderSidebar() {
       <span class="sb-count">${count}</span>
     </div>`;
   }).join('');
-  setHtmlIfChanged(el, 'sidebar', '<div class="sb-hd">Locais</div>' + items);
+  setHtmlIfChanged(listEl, 'sidebarList', items);
 }
 
 function scrollToGroup(gId) {
