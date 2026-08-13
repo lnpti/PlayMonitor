@@ -3397,11 +3397,22 @@ function evaluateStnConnAlerts(stn) {
 // (Synteck XT, BT APP10, Synteck RUS), cada um com seus próprios nomes de
 // campo, normalizados aqui em `extract()`.
 //
-// IMPORTANTE: nunca alerta por potência BAIXA — várias rádios operam de
-// propósito abaixo do máximo do transmissor, e algumas reduzem a potência
-// à noite pra economizar energia. Só potência ACIMA do alvo é alertada,
-// já que isso quase nunca é intencional. Sem alvo de potência conhecido
-// (RUS), esse alerta específico simplesmente não roda.
+// POTÊNCIA: acima do alvo (>115%) sempre alerta, já que isso quase nunca é
+// intencional. Abaixo do alvo (<75%) só alerta se a rádio NÃO estiver
+// marcada como "reduz potência à noite" (ou estiver fora da janela
+// configurada) — várias rádios operam de propósito abaixo do máximo, e
+// pra essas o ideal é configurar a janela noturna em vez de desativar o
+// alerta de vez, senão uma queda de potência por falha de verdade também
+// passaria batido. Sem alvo de potência conhecido (RUS), nenhum dos dois
+// alertas de potência roda.
+function isInNightPowerWindow(stn) {
+  if (!stn.nightPowerReduction) return false;
+  const h = new Date().getHours();
+  const start = stn.nightPowerStart ?? 22;
+  const end = stn.nightPowerEnd ?? 6;
+  if (start === end) return true;
+  return start < end ? (h >= start && h < end) : (h >= start || h < end);
+}
 function evaluateStnRFAlerts(stn) {
   if (!live[stn.id]?.data) return; // sem dado novo (ex.: offline) — não mexe no estado dos alertas de RF
   if (!genAlertSt[stn.id]) genAlertSt[stn.id] = { pending:{}, active:{}, fetchFailCount:0, prevData:null };
@@ -3496,6 +3507,32 @@ function evaluateStnRFAlerts(stn) {
     if (gs.active.pwrHigh) {
       gs.active.pwrHigh = false;
       addEvent(stn.id, stn.name, '🟢', 'ok', 'pwrHigh', `${stnLabel}: Potência normalizada`);
+    }
+  }
+
+  // ── Potência abaixo do alvo (<75%) — só quando a rádio não está marcada
+  // pra reduzir potência à noite, ou está fora da janela configurada. ──
+  const nightSuppressed = isInNightPowerWindow(stn);
+  if (now0.pwrPct != null && now0.pwrPct < 75 && !nightSuppressed) {
+    if (!gs.pending.pwrLow && !gs.active.pwrLow)
+      setPendingAlert(stn.id, 'pwrLow', ALERT_DELAYS.pwrLow, () => {
+        const cur = extract();
+        if (cur.pwrPct != null && cur.pwrPct < 75 && !isInNightPowerWindow(stn)) {
+          genAlertSt[stn.id].active.pwrLow = true;
+          addEvent(stn.id, stn.name, '⚠️', 'high', 'pwrLow', `${stnLabel}: POTÊNCIA ABAIXO DO ESPERADO — ${cur.pwrPct.toFixed(0)}%`,
+            'Se for intencional (redução programada), configure a janela noturna da rádio em Configurações.');
+        }
+      });
+  } else if (nightSuppressed) {
+    // Silenciado pela janela noturna — não afirma "normalizado" (não
+    // sabemos se de fato normalizou, só que paramos de checar agora).
+    clearPendingAlert(stn.id, 'pwrLow');
+    gs.active.pwrLow = false;
+  } else {
+    clearPendingAlert(stn.id, 'pwrLow');
+    if (gs.active.pwrLow) {
+      gs.active.pwrLow = false;
+      addEvent(stn.id, stn.name, '🟢', 'ok', 'pwrLow', `${stnLabel}: Potência normalizada`);
     }
   }
 
@@ -4253,7 +4290,22 @@ function stnRowHtml(s, gId) {
         <div class="lbl">Community SNMP</div>
         <input type="text" class="inp" placeholder="public" value="${esc(s.snmpCommunity||'')}" onchange="updStn('${s.id}','snmpCommunity',this.value)">
       </div>
-      ` : ''}
+      ` : `
+      <div class="stn-row-stream">
+        <div class="lbl">Redução de potência à noite (evita alerta de "potência baixa" nesse horário)</div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <button class="tgl ${s.nightPowerReduction?'on':''}" onclick="toggleNightPowerReduction('${s.id}')"></button>
+          <span style="font-size:11px;color:var(--muted)">${s.nightPowerReduction?'Ativado':'Desativado'}</span>
+          ${s.nightPowerReduction ? `
+          <span style="font-size:11px;color:var(--muted);margin-left:6px">das</span>
+          <input type="number" class="inp" style="width:60px" min="0" max="23" value="${s.nightPowerStart ?? 22}" onchange="updStn('${s.id}','nightPowerStart',+this.value)">
+          <span style="font-size:11px;color:var(--muted)">h às</span>
+          <input type="number" class="inp" style="width:60px" min="0" max="23" value="${s.nightPowerEnd ?? 6}" onchange="updStn('${s.id}','nightPowerEnd',+this.value)">
+          <span style="font-size:11px;color:var(--muted)">h</span>
+          ` : ''}
+        </div>
+      </div>
+      `}
       <div class="stn-row-stream">
         <div class="lbl">URL Streaming (opcional)</div>
         <input type="url" class="inp" placeholder="https://painel.sintonizar.tv.br:10106" value="${esc(s.streamUrl||'')}" onchange="updStn('${s.id}','streamUrl',this.value)">
@@ -4556,6 +4608,13 @@ function tglStn(id) {
   renderStnList(); renderAll();
 }
 
+function toggleNightPowerReduction(id) {
+  let s; for (const gr of cfg.groups) { s=gr.stations.find(s=>s.id===id); if(s) break; }
+  if(!s) return;
+  s.nightPowerReduction = !s.nightPowerReduction;
+  renderStnList();
+}
+
 function testStn(id) {
   let s; for (const gr of cfg.groups) { s=gr.stations.find(s=>s.id===id); if(s) break; }
   if(!s) return;
@@ -4718,6 +4777,7 @@ const ALERT_DELAYS = {
   vswrHigh: 15000,
   tempHigh: 15000,
   pwrHigh: 15000,
+  pwrLow: 15000,
 };
 const FUEL_CRIT_REPEAT_MS = 15 * 60 * 1000; // reenvia o alerta crítico de combustível a cada 15min enquanto <15%
 
@@ -4754,7 +4814,7 @@ const NOTIFY_ALL_CATEGORIES = ['transmitter','generator','streaming'];
 // escolhe receber ou não. streamDown/stnOffline são específicos; qualquer
 // outro condKey (inclusive null, usado nos eventos de comando manual e
 // "sistema normal") vem de gerador.
-const TRANSMITTER_COND_KEYS = new Set(['stnOffline', 'rfFault', 'vswrHigh', 'tempHigh', 'pwrHigh']);
+const TRANSMITTER_COND_KEYS = new Set(['stnOffline', 'rfFault', 'vswrHigh', 'tempHigh', 'pwrHigh', 'pwrLow']);
 function eventCategory(condKey) {
   if (condKey === 'streamDown') return 'streaming';
   if (TRANSMITTER_COND_KEYS.has(condKey)) return 'transmitter';
