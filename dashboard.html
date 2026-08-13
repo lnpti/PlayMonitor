@@ -462,6 +462,10 @@ body.dragging-group *{cursor:grabbing!important}
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 22h18"/><path d="M6 18V9a2 2 0 0 1 2-2h3V4a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v3h1a2 2 0 0 1 2 2v9"/></svg>
           Relatório de combustível/bateria
         </button>
+        <button class="hd-menu-item" onclick="closeHdMenus();openUptimeReport()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Relatório de uptime
+        </button>
         <button class="hd-menu-item" onclick="closeHdMenus();openListenerReport()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 3 5-8"/></svg>
           Relatório de ouvintes
@@ -705,6 +709,37 @@ body.dragging-group *{cursor:grabbing!important}
           </div>
           <div id="gmReportBody"></div>
         </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Uptime Report Modal -->
+<div id="uptimeReportModal" class="modal-overlay" onclick="if(event.target===this)closeUptimeReport()">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-hd">
+      <span class="modal-hd-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Relatório de Uptime
+      </span>
+      <button class="modal-close" onclick="closeUptimeReport()" title="Fechar">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" style="padding:0 16px;display:flex;flex-direction:column">
+      <div style="display:flex;gap:8px;padding:10px 0;flex-wrap:wrap;align-items:center;flex-shrink:0">
+        <select class="inp" id="upStnSelect" onchange="renderUptimeReportBody()" style="flex:1;min-width:180px"></select>
+        <div class="density-toggle">
+          <button type="button" class="density-btn active" id="upTabDaily" onclick="setUptimeReportMode('daily')">Diário</button>
+          <button type="button" class="density-btn" id="upTabMonthly" onclick="setUptimeReportMode('monthly')">Mensal</button>
+        </div>
+      </div>
+      <div style="overflow-y:auto">
+        <div class="chart-card">
+          <div class="chart-card-title" id="upChartTitle">Uptime</div>
+          <div id="upChart"></div>
+        </div>
+        <div id="upReportBody"></div>
       </div>
     </div>
   </div>
@@ -1264,6 +1299,98 @@ function allMetricGenerators() {
     gr.stations.forEach(s => (s.generators||[]).forEach(gen => out.push({ id: gen.id, name: gen.name, groupName: `${gr.name} / ${s.name}` })));
   });
   return out;
+}
+
+/* ── RELATÓRIO DE UPTIME (% do tempo online, por transmissor/mês) ──
+   Cada tentativa de leitura (sucesso ou falha) conta como uma amostra do
+   dia; uptime% = amostras com sucesso / total de amostras. Mais simples
+   que reconstruir intervalos a partir do log de eventos, e não depende de
+   nenhum alerta ter disparado (funciona mesmo com o motor de alertas
+   desligado pro grupo). A BT conta uma amostra por evento de conexão
+   (onmessage/onclose) em vez de por intervalo fixo — ainda reflete
+   corretamente mais quedas = uptime mais baixo, só com peso diferente do
+   polling por intervalo do XT/RUS. */
+const STN_UPTIME_KEY = 'snMon_stnuptime_v1';
+const STN_UPTIME_RETENTION_DAYS = 400;
+let stnUptimeHistory = {}; // { [stnId]: { [dia]: { ok, total, name } } }
+let stnUptimeSaveTimer = null;
+let stnUptimePruneCheck = {};
+
+function loadStnUptimeHistory() {
+  try { stnUptimeHistory = JSON.parse(localStorage.getItem(STN_UPTIME_KEY)) || {}; } catch(e) { stnUptimeHistory = {}; }
+}
+function saveStnUptimeHistoryNow() {
+  try { localStorage.setItem(STN_UPTIME_KEY, JSON.stringify(stnUptimeHistory)); } catch(e) {}
+}
+function saveStnUptimeHistoryDebounced() {
+  if (stnUptimeSaveTimer) return;
+  stnUptimeSaveTimer = setTimeout(() => { stnUptimeSaveTimer = null; saveStnUptimeHistoryNow(); }, 5000);
+}
+function pruneStnUptimeHistory(stnId) {
+  const now = Date.now();
+  if (stnUptimePruneCheck[stnId] && now - stnUptimePruneCheck[stnId] < 24*3600*1000) return;
+  stnUptimePruneCheck[stnId] = now;
+  const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - STN_UPTIME_RETENTION_DAYS);
+  const cutoffStr = localDateStr(cutoff);
+  const days = stnUptimeHistory[stnId];
+  if (!days) return;
+  for (const day in days) if (day < cutoffStr) delete days[day];
+}
+function recordStnUptimeSample(stn) {
+  const st = live[stn.id];
+  if (!st) return;
+  const isOnline = !st.err;
+  if (!stnUptimeHistory[stn.id]) stnUptimeHistory[stn.id] = {};
+  const day = localDateStr();
+  let rec = stnUptimeHistory[stn.id][day];
+  if (!rec) rec = stnUptimeHistory[stn.id][day] = { ok: 0, total: 0, name: stn.name };
+  rec.name = stn.name;
+  rec.total++;
+  if (isOnline) rec.ok++;
+  saveStnUptimeHistoryDebounced();
+  pruneStnUptimeHistory(stn.id);
+  refreshUptimeReportIfShowing(stn.id);
+}
+function stnUptimeMonthMap(stnId) {
+  const hist = stnUptimeHistory[stnId] || {};
+  const months = {};
+  for (const day in hist) {
+    const m = day.slice(0, 7);
+    const r = hist[day];
+    if (!months[m]) months[m] = { ok: 0, total: 0 };
+    months[m].ok += r.ok;
+    months[m].total += r.total;
+  }
+  return months;
+}
+function stnUptimeDailyRows(stnId, days) {
+  const hist = stnUptimeHistory[stnId] || {};
+  return Object.keys(hist).sort().slice(-(days || 30)).reverse().map(day => {
+    const r = hist[day];
+    return { key: day, label: day.split('-').reverse().join('/'), pct: r.total ? r.ok/r.total*100 : null, total: r.total };
+  });
+}
+function stnUptimeMonthlyRows(stnId) {
+  const months = stnUptimeMonthMap(stnId);
+  return Object.keys(months).sort().reverse().map(m => {
+    const [y, mo] = m.split('-');
+    const r = months[m];
+    return { key: m, label: `${CHART_MESES[+mo-1]}/${y}`, pct: r.total ? r.ok/r.total*100 : null, total: r.total };
+  });
+}
+function stnUptimeSeries(stnId, mode) {
+  const limit = mode === 'daily' ? 30 : 12;
+  let keys, getPct;
+  if (mode === 'daily') {
+    const hist = stnUptimeHistory[stnId] || {};
+    keys = Object.keys(hist).sort().slice(-limit);
+    getPct = k => { const r = hist[k]; return (r && r.total) ? r.ok/r.total*100 : null; };
+  } else {
+    const months = stnUptimeMonthMap(stnId);
+    keys = Object.keys(months).sort().slice(-limit);
+    getPct = k => { const r = months[k]; return (r && r.total) ? r.ok/r.total*100 : null; };
+  }
+  return { keys, series: [ { name: 'Uptime', color: 'var(--good)', values: keys.map(getPct) } ] };
 }
 
 /* ── GRÁFICOS DO RELATÓRIO DE OUVINTES (SVG, sem libs externas) ──
@@ -1840,6 +1967,72 @@ function renderGenMetricReportBody() {
   </table>`;
 }
 
+/* ── RELATÓRIO DE UPTIME ── mais simples que os outros três: uma métrica só
+   (uptime%), sem detalhe por hora (não agrega muito ver isso hora a hora) e
+   sem cards recolhíveis (só um gráfico no modal). */
+let uptimeReportMode = 'daily';
+function setUptimeReportMode(mode) {
+  uptimeReportMode = mode;
+  document.getElementById('upTabDaily').classList.toggle('active', mode === 'daily');
+  document.getElementById('upTabMonthly').classList.toggle('active', mode === 'monthly');
+  renderUptimeReportBody();
+}
+function openUptimeReport() {
+  const sel = document.getElementById('upStnSelect');
+  const stations = allTxStations();
+  const prevVal = sel.value;
+  sel.innerHTML = stations.map(s => `<option value="${s.id}">${esc(s.name)}${s.groupName ? ' ('+esc(s.groupName)+')' : ''}</option>`).join('')
+    || '<option value="">Nenhum transmissor configurado</option>';
+  if (stations.some(s => s.id === prevVal)) sel.value = prevVal;
+  renderUptimeReportBody();
+  document.getElementById('uptimeReportModal').classList.add('open');
+}
+function closeUptimeReport() { document.getElementById('uptimeReportModal').classList.remove('open'); }
+let uptimeLiveRefreshTimer = null;
+function refreshUptimeReportIfShowing(stnId) {
+  const modal = document.getElementById('uptimeReportModal');
+  if (!modal || !modal.classList.contains('open')) return;
+  if (document.getElementById('upStnSelect')?.value !== stnId) return;
+  if (uptimeLiveRefreshTimer) return;
+  uptimeLiveRefreshTimer = setTimeout(() => { uptimeLiveRefreshTimer = null; renderUptimeReportBody(); }, 800);
+}
+function renderUptimeReportBody() {
+  const stnId = document.getElementById('upStnSelect')?.value;
+  const body = document.getElementById('upReportBody');
+  if (!body) return;
+  const modeLabel = uptimeReportMode === 'daily' ? 'diário' : 'mensal';
+
+  const chartEl = document.getElementById('upChart');
+  const chartTitle = document.getElementById('upChartTitle');
+  const stnInfo = allTxStations().find(x => x.id === stnId);
+  if (chartTitle) chartTitle.textContent = stnInfo ? `${stnInfo.name} — uptime ${modeLabel}` : 'Uptime';
+  if (chartEl) {
+    if (!stnId) { chartEl.innerHTML = ''; }
+    else {
+      const { keys, series } = stnUptimeSeries(stnId, uptimeReportMode);
+      renderTrendChart(chartEl, keys, series, { mode: uptimeReportMode, height: 150, emptyMsg: 'Ainda sem dados suficientes — o histórico começa a ser guardado a partir de agora.' });
+    }
+  }
+
+  if (!stnId) { body.innerHTML = `<div class="al-empty">Nenhum transmissor configurado.</div>`; return; }
+  const rows = uptimeReportMode === 'daily' ? stnUptimeDailyRows(stnId, 60) : stnUptimeMonthlyRows(stnId);
+  if (!rows.length) { body.innerHTML = `<div class="al-empty">Ainda sem dados suficientes — o histórico começa a ser guardado a partir de agora.</div>`; return; }
+  const isDaily = uptimeReportMode === 'daily';
+  const pctColor = pct => pct == null ? 'var(--muted)' : pct >= 99 ? 'var(--good)' : pct >= 95 ? 'var(--warn)' : 'var(--crit)';
+  body.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr style="text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">
+      <th style="padding:7px 4px">${isDaily ? 'Data' : 'Mês'}</th>
+      <th style="padding:7px 4px;text-align:right">Uptime</th>
+      <th style="padding:7px 4px;text-align:right">Amostras</th>
+    </tr></thead>
+    <tbody>${rows.map(r => `<tr style="border-top:1px solid var(--bdr)">
+      <td style="padding:8px 4px">${r.label}</td>
+      <td style="padding:8px 4px;text-align:right;font-weight:800;color:${pctColor(r.pct)}">${r.pct!=null ? r.pct.toFixed(1)+'%' : '—'}</td>
+      <td style="padding:8px 4px;text-align:right;color:var(--muted);font-size:11px">${r.total}</td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+}
+
 function saveAlertState() {
   try {
     localStorage.setItem(EV_KEY, JSON.stringify(eventLog.slice(0, 200)));
@@ -1977,6 +2170,7 @@ function startBTConn(stn) {
       evaluateStnConnAlerts(stn);
       evaluateStnRFAlerts(stn);
       recordStnMetricSample(stn);
+      recordStnUptimeSample(stn);
       updateGlobalTs();
       renderAll();
     } catch {}
@@ -1993,6 +2187,7 @@ function startBTConn(stn) {
       // da hora. onclose sempre roda pra toda queda de conexão, incluindo
       // depois de um erro, então é o ponto certo pra contar.
       evaluateStnConnAlerts(stn);
+      recordStnUptimeSample(stn);
       renderAll();
       // reconnect after 10s
       setTimeout(() => { if (btWs[stn.id] === ws) startBTConn(stn); }, 10000);
@@ -2079,6 +2274,7 @@ async function fetchSNMPStn(stn) {
   evaluateStnConnAlerts(stn);
   evaluateStnRFAlerts(stn);
   recordStnMetricSample(stn);
+  recordStnUptimeSample(stn);
   renderAll();
   updateGlobalTs();
 }
@@ -3162,6 +3358,7 @@ async function fetchStn(stn) {
   evaluateStnConnAlerts(stn);
   evaluateStnRFAlerts(stn);
   recordStnMetricSample(stn);
+  recordStnUptimeSample(stn);
   renderAll();
   updateGlobalTs();
 }
@@ -5225,6 +5422,7 @@ function init() {
   loadListenerHistory();
   loadTxMetricHistory();
   loadGenMetricHistory();
+  loadStnUptimeHistory();
   loadGroupLayout();
   loadGroupDensity();
   loadPanelsHidden();
