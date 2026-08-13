@@ -1,5 +1,6 @@
 const { app, BrowserWindow, Menu, shell, globalShortcut, ipcMain, dialog } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const net = require('net');
 const { autoUpdater } = require('electron-updater');
 const nodemailer = require('nodemailer');
@@ -292,6 +293,44 @@ ipcMain.handle('snmp-get', async (event, { host, port, community, oids }) => {
   if (!host || typeof host !== 'string') return { success: false, error: 'host inválido' };
   if (!Array.isArray(oids) || !oids.length) return { success: false, error: 'oids inválidos' };
   return snmpGet(host, port, community, oids);
+});
+
+// ── Backup automático da configuração ──
+// Grava em arquivo (não em localStorage) de propósito: o objetivo é
+// sobreviver a um localStorage/perfil do Chromium corrompido, não só a
+// uma edição ruim salva sem querer — se o backup morasse no mesmo lugar
+// que pode corromper, não protegeria contra o cenário que mais importa.
+const BACKUP_RETENTION_COUNT = 30; // ~1 mês de backups diários
+function getBackupDir() {
+  const dir = path.join(app.getPath('userData'), 'backups');
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+ipcMain.handle('backup-save', async (event, jsonString) => {
+  try {
+    if (typeof jsonString !== 'string' || !jsonString) return { success: false, error: 'configuração inválida' };
+    const dir = getBackupDir();
+    const ts = new Date().toISOString().replace(/[:.]/g, '-');
+    const filePath = path.join(dir, `config-${ts}.json`);
+    fs.writeFileSync(filePath, jsonString, 'utf8');
+    const files = fs.readdirSync(dir).filter(f => f.startsWith('config-') && f.endsWith('.json')).sort();
+    while (files.length > BACKUP_RETENTION_COUNT) {
+      const old = files.shift();
+      try { fs.unlinkSync(path.join(dir, old)); } catch (e) {}
+    }
+    return { success: true, path: filePath };
+  } catch (e) {
+    return { success: false, error: e.message || String(e) };
+  }
+});
+ipcMain.handle('backup-open-folder', async () => {
+  try {
+    const dir = getBackupDir();
+    await shell.openPath(dir);
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e.message || String(e) };
+  }
 });
 
 function createWindow() {

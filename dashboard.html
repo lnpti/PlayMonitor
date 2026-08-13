@@ -851,6 +851,11 @@ body.dragging-group *{cursor:grabbing!important}
         Importar
       </button>
       <input type="file" id="importFileInput" accept=".json,application/json" style="display:none" onchange="handleImportFile(event)">
+      <button class="btn" onclick="openBackupFolder()" title="Backups automáticos diários ficam salvos em arquivo, fora do navegador">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        Backups
+      </button>
+      <span id="lastBackupInfo" style="font-size:10px;color:var(--muted);align-self:center"></span>
       <div class="modal-ft-right">
         <div class="lbl" style="margin-bottom:0;white-space:nowrap">Intervalo padrão (s)</div>
         <input type="number" class="inp" id="gInterval" min="2" max="120" style="width:80px">
@@ -4652,9 +4657,45 @@ function testStn(id) {
   else fetchStn(s);
 }
 
+/* ── BACKUP AUTOMÁTICO DA CONFIGURAÇÃO ──
+   Em arquivo (userData/backups/), não em localStorage — de propósito,
+   pra sobreviver a um perfil do Chromium/localStorage corrompido, não só
+   a uma edição salva sem querer (isso o "Exportar" manual já cobria).
+   Dispara em "Salvar e Aplicar" (mudança de verdade) e, além disso, uma
+   vez por dia enquanto o app fica aberto (checagem barata a cada hora,
+   só grava quando já faz 24h do último backup — mesmo padrão já usado
+   pra podar os históricos de métricas). */
+const AUTO_BACKUP_KEY = 'snMon_lastbackup_v1';
+async function autoBackupConfig() {
+  if (!window.backupAPI) return;
+  try {
+    const res = await window.backupAPI.save(JSON.stringify(cfg));
+    if (res?.success) { try { localStorage.setItem(AUTO_BACKUP_KEY, String(Date.now())); } catch(e) {} updateLastBackupInfo(); }
+  } catch(e) {}
+}
+function checkDailyAutoBackup() {
+  let lastBackup = 0;
+  try { lastBackup = +localStorage.getItem(AUTO_BACKUP_KEY) || 0; } catch(e) {}
+  if (Date.now() - lastBackup < 24*3600*1000) return;
+  autoBackupConfig();
+}
+function updateLastBackupInfo() {
+  const el = document.getElementById('lastBackupInfo');
+  if (!el) return;
+  let lastBackup = 0;
+  try { lastBackup = +localStorage.getItem(AUTO_BACKUP_KEY) || 0; } catch(e) {}
+  el.textContent = lastBackup ? `Último backup automático: ${new Date(lastBackup).toLocaleString('pt-BR')}` : 'Ainda sem backup automático';
+}
+async function openBackupFolder() {
+  if (!window.backupAPI) return;
+  await autoBackupConfig(); // garante que tem pelo menos um backup recente antes de abrir a pasta
+  window.backupAPI.openFolder();
+}
+
 function saveCfg() {
   cfg.interval = +document.getElementById('gInterval').value||5;
   saveCfgToStorage(); restartAll();
+  autoBackupConfig();
   const b = document.getElementById('saveBtn');
   const orig = b.innerHTML;
   b.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Salvo!';
@@ -4777,6 +4818,7 @@ function renderUpdateStatus(data) {
 function openCfg() {
   cfg.groups.forEach(gr => { if (cfgGrpCollapsed[gr.id] === undefined) cfgGrpCollapsed[gr.id] = true; });
   renderStnList();
+  updateLastBackupInfo();
   document.getElementById('cfgModal').classList.add('open');
 }
 function closeCfg() {
@@ -5516,6 +5558,8 @@ function init() {
   loadPanelsHidden();
   renderStnList();
   renderAll();
+  checkDailyAutoBackup();
+  setInterval(checkDailyAutoBackup, 60*60*1000);
   updateBell();
   renderAlertBanner();
   applyPanelsHidden();

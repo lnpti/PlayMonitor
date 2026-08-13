@@ -22,3 +22,8 @@ contextBridge.exposeInMainWorld('updateAPI', {
 contextBridge.exposeInMainWorld('notifyAPI', {
   sendEmail: (payload) => ipcRenderer.invoke('send-email', payload),
 });
+
+contextBridge.exposeInMainWorld('backupAPI', {
+  save: (jsonString) => ipcRenderer.invoke('backup-save', jsonString),
+  openFolder: () => ipcRenderer.invoke('backup-open-folder'),
+});
