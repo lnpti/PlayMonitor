@@ -454,6 +454,10 @@ body.dragging-group *{cursor:grabbing!important}
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10"/></svg>
           Relatório de geradores
         </button>
+        <button class="hd-menu-item" onclick="closeHdMenus();openTxReport()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10"/><path d="M12 20V4"/><path d="M20 20v-6"/></svg>
+          Relatório de transmissores
+        </button>
         <button class="hd-menu-item" onclick="closeHdMenus();openListenerReport()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 3 5-8"/></svg>
           Relatório de ouvintes
@@ -593,6 +597,58 @@ body.dragging-group *{cursor:grabbing!important}
             <div class="chart-card-body" id="lrChartStn"></div>
           </div>
           <div id="listenerReportBody"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Transmitter Metrics Report Modal -->
+<div id="txReportModal" class="modal-overlay" onclick="if(event.target===this)closeTxReport()">
+  <div class="modal" style="max-width:740px">
+    <div class="modal-hd">
+      <span class="modal-hd-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10"/><path d="M12 20V4"/><path d="M20 20v-6"/></svg>
+        Relatório de Transmissores
+      </span>
+      <button class="modal-close" onclick="closeTxReport()" title="Fechar">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" style="padding:0 16px;display:flex;flex-direction:column">
+      <div style="display:flex;gap:8px;padding:10px 0 0;flex-wrap:wrap;align-items:center;flex-shrink:0">
+        <select class="inp" id="txStnSelect" onchange="renderTxReportBody()" style="flex:1;min-width:180px"></select>
+        <div class="density-toggle">
+          <button type="button" class="density-btn active" id="txMetricPower" onclick="setTxMetric('power')">Potência</button>
+          <button type="button" class="density-btn" id="txMetricVswr" onclick="setTxMetric('vswr')">VSWR</button>
+          <button type="button" class="density-btn" id="txMetricTemp" onclick="setTxMetric('temp')">Temperatura</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;padding:8px 0 10px;flex-wrap:wrap;align-items:center;flex-shrink:0">
+        <div class="density-toggle">
+          <button type="button" class="density-btn" id="txTabHourly" onclick="setTxReportMode('hourly')">Horário</button>
+          <button type="button" class="density-btn active" id="txTabDaily" onclick="setTxReportMode('daily')">Diário</button>
+          <button type="button" class="density-btn" id="txTabMonthly" onclick="setTxReportMode('monthly')">Mensal</button>
+        </div>
+      </div>
+      <div style="overflow-y:auto">
+        <div class="chart-card" id="txCard_hour" style="display:none">
+          <div class="chart-card-hd" onclick="toggleTxChartCard('hour')">
+            <div class="chart-card-title" id="txChartHourTitle">Por hora</div>
+            <input type="date" class="inp" id="txHourDate" onclick="event.stopPropagation()" onchange="renderTxReportBody()" style="width:150px;height:28px">
+            <svg id="txChev_hour" class="grp-chev open" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+          </div>
+          <div class="chart-card-body" id="txChartHour"></div>
+        </div>
+        <div id="txTrendSection">
+          <div class="chart-card" id="txCard_main">
+            <div class="chart-card-hd" onclick="toggleTxChartCard('main')">
+              <div class="chart-card-title" id="txChartMainTitle">Rádio selecionada</div>
+              <svg id="txChev_main" class="grp-chev open" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+            <div class="chart-card-body" id="txChartMain"></div>
+          </div>
+          <div id="txReportBody"></div>
         </div>
       </div>
     </div>
@@ -871,6 +927,152 @@ function listenerMonthlyRows(stnId) {
 function allListenerStations() {
   const out = [];
   cfg.groups.forEach(gr => gr.stations.forEach(s => { if (s.streamUrl) out.push({ id: s.id, name: s.name, groupName: gr.name }); }));
+  return out;
+}
+
+/* ── HISTÓRICO DE MÉTRICAS DOS TRANSMISSORES (potência/VSWR/temperatura) ──
+   Mesmo padrão do histórico de ouvintes: agregado por rádio/dia (pico +
+   soma/contagem pra tirar a média), com detalhe por hora numa janela mais
+   curta. Funciona pros 3 tipos de transmissor — `extractStnMetrics` sabe o
+   nome de campo certo de cada um. "Pico" aqui é sempre o maior valor visto
+   no período pra VSWR/temperatura (pior caso) e pra potência (maior saída),
+   sentido consistente pros três: quanto maior o valor mostrado, mais chama
+   atenção pra conferir. */
+const TX_METRIC_HIST_KEY = 'snMon_txmetrichist_v1';
+const TX_METRIC_HIST_RETENTION_DAYS = 400;
+const TX_METRIC_HOURLY_RETENTION_DAYS = 45;
+const TX_METRIC_LABELS = { power: 'Potência (kW)', vswr: 'VSWR', temp: 'Temperatura (°C)' };
+let txMetricHistory = {}; // { [stnId]: { [dia]: { name, power:{peak,sum,count}, vswr:{...}, temp:{...}, hourly:{[hh]:{power,vswr,temp}} } } }
+let txMetricHistSaveTimer = null;
+let txMetricHistPruneCheck = {};
+
+function loadTxMetricHistory() {
+  try { txMetricHistory = JSON.parse(localStorage.getItem(TX_METRIC_HIST_KEY)) || {}; } catch(e) { txMetricHistory = {}; }
+}
+function saveTxMetricHistoryNow() {
+  try { localStorage.setItem(TX_METRIC_HIST_KEY, JSON.stringify(txMetricHistory)); } catch(e) {}
+}
+function saveTxMetricHistoryDebounced() {
+  if (txMetricHistSaveTimer) return;
+  txMetricHistSaveTimer = setTimeout(() => { txMetricHistSaveTimer = null; saveTxMetricHistoryNow(); }, 5000);
+}
+function pruneTxMetricHistory(stnId) {
+  const now = Date.now();
+  if (txMetricHistPruneCheck[stnId] && now - txMetricHistPruneCheck[stnId] < 24*3600*1000) return;
+  txMetricHistPruneCheck[stnId] = now;
+  const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - TX_METRIC_HIST_RETENTION_DAYS);
+  const cutoffStr = localDateStr(cutoff);
+  const hourlyCutoff = new Date(); hourlyCutoff.setDate(hourlyCutoff.getDate() - TX_METRIC_HOURLY_RETENTION_DAYS);
+  const hourlyCutoffStr = localDateStr(hourlyCutoff);
+  const days = txMetricHistory[stnId];
+  if (!days) return;
+  for (const day in days) {
+    if (day < cutoffStr) { delete days[day]; continue; }
+    if (day < hourlyCutoffStr && days[day].hourly) delete days[day].hourly;
+  }
+}
+function emptyMetricAgg() { return { peak: 0, sum: 0, count: 0 }; }
+function bumpMetricAgg(agg, v) { if (v == null || isNaN(v)) return; if (v > agg.peak) agg.peak = v; agg.sum += v; agg.count++; }
+
+// Potência/VSWR/temperatura em nomes de campo diferentes por tipo — normaliza
+// os 3 num único formato aqui, uma vez só, em vez de espalhar esse if/else
+// por todo canto que precisa desses valores (o motor de alerta de RF já fez
+// algo parecido, mas ali o interesse era % do alvo, aqui é o valor em si).
+function extractStnMetrics(stn) {
+  const d = live[stn.id]?.data;
+  if (!d) return null;
+  if (stn.txType === 'bt') return { power: d.fwdKw ?? null, vswr: d.vswr ?? null, temp: d.temp ?? null };
+  if (stn.txType === 'snmp') return { power: d.fwd != null ? d.fwd / 1000 : null, vswr: d.vswr ?? null, temp: d.temp ?? null };
+  return { power: d.fwd?.w != null ? d.fwd.w / 1000 : null, vswr: d.ref?.vswr ?? null, temp: d.temp ?? null };
+}
+function recordStnMetricSample(stn) {
+  const m = extractStnMetrics(stn);
+  if (!m) return;
+  if (!txMetricHistory[stn.id]) txMetricHistory[stn.id] = {};
+  const now = new Date();
+  const day = localDateStr(now);
+  let rec = txMetricHistory[stn.id][day];
+  if (!rec) rec = txMetricHistory[stn.id][day] = { name: stn.name, power: emptyMetricAgg(), vswr: emptyMetricAgg(), temp: emptyMetricAgg(), hourly: {} };
+  if (!rec.hourly) rec.hourly = {};
+  rec.name = stn.name;
+  bumpMetricAgg(rec.power, m.power);
+  bumpMetricAgg(rec.vswr, m.vswr);
+  bumpMetricAgg(rec.temp, m.temp);
+  const hKey = String(now.getHours()).padStart(2, '0');
+  let hr = rec.hourly[hKey];
+  if (!hr) hr = rec.hourly[hKey] = { power: emptyMetricAgg(), vswr: emptyMetricAgg(), temp: emptyMetricAgg() };
+  bumpMetricAgg(hr.power, m.power);
+  bumpMetricAgg(hr.vswr, m.vswr);
+  bumpMetricAgg(hr.temp, m.temp);
+  saveTxMetricHistoryDebounced();
+  pruneTxMetricHistory(stn.id);
+  refreshTxReportIfShowing(stn.id);
+}
+function txMetricStationMonthMap(stnId, metricKey) {
+  const hist = txMetricHistory[stnId] || {};
+  const months = {};
+  for (const day in hist) {
+    const m = day.slice(0, 7);
+    const r = hist[day][metricKey] || emptyMetricAgg();
+    if (!months[m]) months[m] = emptyMetricAgg();
+    months[m].peak = Math.max(months[m].peak, r.peak);
+    months[m].sum += r.sum;
+    months[m].count += r.count;
+  }
+  return months;
+}
+function txMetricDailyRows(stnId, metricKey, days) {
+  const hist = txMetricHistory[stnId] || {};
+  return Object.keys(hist).sort().slice(-(days || 30)).reverse().map(day => {
+    const r = hist[day][metricKey] || emptyMetricAgg();
+    return { key: day, label: day.split('-').reverse().join('/'), peak: r.peak, avg: r.count ? r.sum / r.count : 0, samples: r.count };
+  });
+}
+function txMetricMonthlyRows(stnId, metricKey) {
+  const months = txMetricStationMonthMap(stnId, metricKey);
+  return Object.keys(months).sort().reverse().map(m => {
+    const [y, mo] = m.split('-');
+    const r = months[m];
+    return { key: m, label: `${CHART_MESES[+mo-1]}/${y}`, peak: r.peak, avg: r.count ? r.sum / r.count : 0, samples: r.count };
+  });
+}
+function txMetricHourlyRows(stnId, metricKey, dayKey) {
+  const hourly = txMetricHistory[stnId]?.[dayKey]?.hourly || {};
+  const out = [];
+  for (let h = 0; h < 24; h++) {
+    const hKey = String(h).padStart(2, '0');
+    const r = hourly[hKey]?.[metricKey];
+    out.push({ key: hKey, peak: r ? r.peak : null, avg: (r && r.count) ? r.sum / r.count : null, samples: r ? r.count : 0 });
+  }
+  return out;
+}
+function txMetricIndividualSeries(stnId, metricKey, mode) {
+  const limit = mode === 'daily' ? 30 : 12;
+  const map = mode === 'daily'
+    ? Object.fromEntries(Object.entries(txMetricHistory[stnId] || {}).map(([k, v]) => [k, v[metricKey]]))
+    : txMetricStationMonthMap(stnId, metricKey);
+  const keys = Object.keys(map).sort().slice(-limit);
+  return {
+    keys,
+    series: [
+      { name: 'Pico', color: 'var(--num)', values: keys.map(k => map[k]?.peak ?? null) },
+      { name: 'Média', color: 'var(--muted)', values: keys.map(k => map[k]?.count ? map[k].sum / map[k].count : null) },
+    ],
+  };
+}
+function txMetricHourlySeries(stnId, metricKey, dayKey) {
+  const rows = txMetricHourlyRows(stnId, metricKey, dayKey);
+  return {
+    keys: rows.map(r => r.key),
+    series: [
+      { name: 'Pico', color: 'var(--num)', values: rows.map(r => r.peak) },
+      { name: 'Média', color: 'var(--muted)', values: rows.map(r => r.avg) },
+    ],
+  };
+}
+function allTxStations() {
+  const out = [];
+  cfg.groups.forEach(gr => gr.stations.forEach(s => { if (hasTelemetryUrl(s) || hasSNMPHost(s)) out.push({ id: s.id, name: s.name, groupName: gr.name }); }));
   return out;
 }
 
@@ -1193,6 +1395,136 @@ function renderListenerReportBody() {
   </table>`;
 }
 
+/* ── RELATÓRIO DE MÉTRICAS DOS TRANSMISSORES (potência/VSWR/temperatura) ──
+   Mesmo padrão de abas Horário/Diário/Mensal e cards recolhíveis do
+   relatório de ouvintes, mas sem o gráfico "combinado todas as rádios" —
+   comparar VSWR/temperatura entre rádios com antenas/equipamentos
+   diferentes não tem o mesmo valor que comparar audiência entre elas, então
+   fica só o gráfico da rádio selecionada. Tem um seletor a mais: qual das
+   3 métricas ver (o relatório de ouvintes só tinha uma métrica). */
+let txReportMode = 'daily';
+let txReportMetric = 'power';
+let txCardCollapsed = {};
+function toggleTxChartCard(key) {
+  txCardCollapsed[key] = !txCardCollapsed[key];
+  const card = document.getElementById('txCard_' + key);
+  const chev = document.getElementById('txChev_' + key);
+  if (card) card.classList.toggle('collapsed', !!txCardCollapsed[key]);
+  if (chev) chev.classList.toggle('open', !txCardCollapsed[key]);
+}
+function setTxMetric(metric) {
+  txReportMetric = metric;
+  document.getElementById('txMetricPower').classList.toggle('active', metric === 'power');
+  document.getElementById('txMetricVswr').classList.toggle('active', metric === 'vswr');
+  document.getElementById('txMetricTemp').classList.toggle('active', metric === 'temp');
+  renderTxReportBody();
+}
+function setTxReportMode(mode) {
+  txReportMode = mode;
+  document.getElementById('txTabHourly').classList.toggle('active', mode === 'hourly');
+  document.getElementById('txTabDaily').classList.toggle('active', mode === 'daily');
+  document.getElementById('txTabMonthly').classList.toggle('active', mode === 'monthly');
+  document.getElementById('txCard_hour').style.display = mode === 'hourly' ? '' : 'none';
+  document.getElementById('txTrendSection').style.display = mode === 'hourly' ? 'none' : '';
+  renderTxReportBody();
+}
+function openTxReport() {
+  const sel = document.getElementById('txStnSelect');
+  const stations = allTxStations();
+  const prevVal = sel.value;
+  sel.innerHTML = stations.map(s => `<option value="${s.id}">${esc(s.name)}${s.groupName ? ' ('+esc(s.groupName)+')' : ''}</option>`).join('')
+    || '<option value="">Nenhum transmissor configurado</option>';
+  if (stations.some(s => s.id === prevVal)) sel.value = prevVal;
+  const dateInp = document.getElementById('txHourDate');
+  if (dateInp) {
+    const todayStr = localDateStr();
+    dateInp.max = todayStr;
+    if (!dateInp.value) dateInp.value = todayStr;
+  }
+  renderTxReportBody();
+  document.getElementById('txReportModal').classList.add('open');
+}
+function closeTxReport() { document.getElementById('txReportModal').classList.remove('open'); }
+function selectTxHourDay(dayKey) {
+  const inp = document.getElementById('txHourDate');
+  if (inp) inp.value = dayKey;
+  setTxReportMode('hourly');
+}
+function renderTxHourlyChart() {
+  const stnId = document.getElementById('txStnSelect')?.value;
+  const dayKey = document.getElementById('txHourDate')?.value;
+  const el = document.getElementById('txChartHour');
+  const titleEl = document.getElementById('txChartHourTitle');
+  const stnInfo = allTxStations().find(x => x.id === stnId);
+  const metricLabel = TX_METRIC_LABELS[txReportMetric];
+  if (titleEl) titleEl.textContent = (stnInfo && dayKey) ? `${stnInfo.name} — ${metricLabel} por hora (${chartKeyLabelFull(dayKey, 'daily')})` : metricLabel;
+  if (!el) return;
+  if (!stnId || !dayKey) { el.innerHTML = ''; return; }
+  const { keys, series } = txMetricHourlySeries(stnId, txReportMetric, dayKey);
+  renderTrendChart(el, keys, series, { mode: 'hourly', emptyMsg: 'Sem amostras registradas nesse dia (rádio offline nesse período, ou fora da janela de detalhe por hora do histórico).' });
+}
+let txLiveRefreshTimer = null;
+function refreshTxReportIfShowing(stnId) {
+  const modal = document.getElementById('txReportModal');
+  if (!modal || !modal.classList.contains('open')) return;
+  if (document.getElementById('txStnSelect')?.value !== stnId) return;
+  if (txLiveRefreshTimer) return;
+  txLiveRefreshTimer = setTimeout(() => {
+    txLiveRefreshTimer = null;
+    if (txReportMode === 'hourly') {
+      if (document.getElementById('txHourDate')?.value === localDateStr()) renderTxHourlyChart();
+      return;
+    }
+    renderTxReportBody();
+  }, 800);
+}
+function renderTxReportBody() {
+  const stnId = document.getElementById('txStnSelect')?.value;
+
+  if (txReportMode === 'hourly') {
+    renderTxHourlyChart();
+    return;
+  }
+
+  const body = document.getElementById('txReportBody');
+  if (!body) return;
+  const modeLabel = txReportMode === 'daily' ? 'diário' : 'mensal';
+  const metricLabel = TX_METRIC_LABELS[txReportMetric];
+
+  const chartEl = document.getElementById('txChartMain');
+  const chartTitle = document.getElementById('txChartMainTitle');
+  const stnInfo = allTxStations().find(x => x.id === stnId);
+  if (chartTitle) chartTitle.textContent = stnInfo ? `${stnInfo.name} — ${metricLabel} (pico/média ${modeLabel})` : 'Rádio selecionada';
+  if (chartEl) {
+    if (!stnId) { chartEl.innerHTML = ''; }
+    else {
+      const { keys, series } = txMetricIndividualSeries(stnId, txReportMetric, txReportMode);
+      renderTrendChart(chartEl, keys, series, { mode: txReportMode, emptyMsg: 'Ainda sem dados suficientes — o histórico começa a ser guardado a partir de agora, com o transmissor online.' });
+    }
+  }
+
+  if (!stnId) { body.innerHTML = `<div class="al-empty">Nenhum transmissor configurado.</div>`; return; }
+  const rows = txReportMode === 'daily' ? txMetricDailyRows(stnId, txReportMetric, 60) : txMetricMonthlyRows(stnId, txReportMetric);
+  if (!rows.length) { body.innerHTML = `<div class="al-empty">Ainda sem dados suficientes — o histórico começa a ser guardado a partir de agora, com o transmissor online.</div>`; return; }
+  const selDate = document.getElementById('txHourDate')?.value;
+  const isDaily = txReportMode === 'daily';
+  const fmtVal = v => txReportMetric === 'vswr' ? v.toFixed(2)+':1' : txReportMetric === 'temp' ? v.toFixed(1)+'°C' : v.toFixed(2)+' kW';
+  body.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr style="text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">
+      <th style="padding:7px 4px">${isDaily ? 'Data' : 'Mês'}</th>
+      <th style="padding:7px 4px;text-align:right">Pico</th>
+      <th style="padding:7px 4px;text-align:right">Média</th>
+      <th style="padding:7px 4px;text-align:right">Amostras</th>
+    </tr></thead>
+    <tbody>${rows.map(r => `<tr style="border-top:1px solid var(--bdr);${isDaily ? 'cursor:pointer' : ''}${isDaily && r.key === selDate ? ';background:var(--accent-dim)' : ''}" ${isDaily ? `class="lr-row-clickable" onclick="selectTxHourDay('${r.key}')" title="Ver por hora nesse dia"` : ''}>
+      <td style="padding:8px 4px">${r.label}</td>
+      <td style="padding:8px 4px;text-align:right;font-weight:800;color:var(--num)">${fmtVal(r.peak)}</td>
+      <td style="padding:8px 4px;text-align:right;color:var(--muted)">${fmtVal(r.avg)}</td>
+      <td style="padding:8px 4px;text-align:right;color:var(--muted);font-size:11px">${r.samples}</td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+}
+
 function saveAlertState() {
   try {
     localStorage.setItem(EV_KEY, JSON.stringify(eventLog.slice(0, 200)));
@@ -1329,6 +1661,7 @@ function startBTConn(stn) {
       live[stn.id] = { data: parseBTData(json), err: null, loading: false, ts: Date.now() };
       evaluateStnConnAlerts(stn);
       evaluateStnRFAlerts(stn);
+      recordStnMetricSample(stn);
       updateGlobalTs();
       renderAll();
     } catch {}
@@ -1430,6 +1763,7 @@ async function fetchSNMPStn(stn) {
   }
   evaluateStnConnAlerts(stn);
   evaluateStnRFAlerts(stn);
+  recordStnMetricSample(stn);
   renderAll();
   updateGlobalTs();
 }
@@ -2512,6 +2846,7 @@ async function fetchStn(stn) {
   }
   evaluateStnConnAlerts(stn);
   evaluateStnRFAlerts(stn);
+  recordStnMetricSample(stn);
   renderAll();
   updateGlobalTs();
 }
@@ -4571,6 +4906,7 @@ function init() {
   loadAlertState();
   loadGenRunHistory();
   loadListenerHistory();
+  loadTxMetricHistory();
   loadGroupLayout();
   loadGroupDensity();
   loadPanelsHidden();
