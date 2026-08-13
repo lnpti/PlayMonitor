@@ -458,6 +458,10 @@ body.dragging-group *{cursor:grabbing!important}
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10"/><path d="M12 20V4"/><path d="M20 20v-6"/></svg>
           Relatório de transmissores
         </button>
+        <button class="hd-menu-item" onclick="closeHdMenus();openGenMetricReport()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 22h18"/><path d="M6 18V9a2 2 0 0 1 2-2h3V4a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v3h1a2 2 0 0 1 2 2v9"/></svg>
+          Relatório de combustível/bateria
+        </button>
         <button class="hd-menu-item" onclick="closeHdMenus();openListenerReport()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 3 5-8"/></svg>
           Relatório de ouvintes
@@ -649,6 +653,57 @@ body.dragging-group *{cursor:grabbing!important}
             <div class="chart-card-body" id="txChartMain"></div>
           </div>
           <div id="txReportBody"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Generator Fuel/Battery Metrics Report Modal -->
+<div id="genMetricReportModal" class="modal-overlay" onclick="if(event.target===this)closeGenMetricReport()">
+  <div class="modal" style="max-width:740px">
+    <div class="modal-hd">
+      <span class="modal-hd-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10"/><path d="M12 20V4"/><path d="M20 20v-6"/></svg>
+        Relatório de Combustível/Bateria
+      </span>
+      <button class="modal-close" onclick="closeGenMetricReport()" title="Fechar">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" style="padding:0 16px;display:flex;flex-direction:column">
+      <div style="display:flex;gap:8px;padding:10px 0 0;flex-wrap:wrap;align-items:center;flex-shrink:0">
+        <select class="inp" id="gmGenSelect" onchange="renderGenMetricReportBody()" style="flex:1;min-width:180px"></select>
+        <div class="density-toggle">
+          <button type="button" class="density-btn active" id="gmMetricFuel" onclick="setGenMetric('fuel')">Combustível</button>
+          <button type="button" class="density-btn" id="gmMetricBattery" onclick="setGenMetric('battery')">Bateria</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;padding:8px 0 10px;flex-wrap:wrap;align-items:center;flex-shrink:0">
+        <div class="density-toggle">
+          <button type="button" class="density-btn" id="gmTabHourly" onclick="setGenMetricReportMode('hourly')">Horário</button>
+          <button type="button" class="density-btn active" id="gmTabDaily" onclick="setGenMetricReportMode('daily')">Diário</button>
+          <button type="button" class="density-btn" id="gmTabMonthly" onclick="setGenMetricReportMode('monthly')">Mensal</button>
+        </div>
+      </div>
+      <div style="overflow-y:auto">
+        <div class="chart-card" id="gmCard_hour" style="display:none">
+          <div class="chart-card-hd" onclick="toggleGenMetricChartCard('hour')">
+            <div class="chart-card-title" id="gmChartHourTitle">Por hora</div>
+            <input type="date" class="inp" id="gmHourDate" onclick="event.stopPropagation()" onchange="renderGenMetricReportBody()" style="width:150px;height:28px">
+            <svg id="gmChev_hour" class="grp-chev open" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+          </div>
+          <div class="chart-card-body" id="gmChartHour"></div>
+        </div>
+        <div id="gmTrendSection">
+          <div class="chart-card" id="gmCard_main">
+            <div class="chart-card-hd" onclick="toggleGenMetricChartCard('main')">
+              <div class="chart-card-title" id="gmChartMainTitle">Gerador selecionado</div>
+              <svg id="gmChev_main" class="grp-chev open" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+            <div class="chart-card-body" id="gmChartMain"></div>
+          </div>
+          <div id="gmReportBody"></div>
         </div>
       </div>
     </div>
@@ -1073,6 +1128,141 @@ function txMetricHourlySeries(stnId, metricKey, dayKey) {
 function allTxStations() {
   const out = [];
   cfg.groups.forEach(gr => gr.stations.forEach(s => { if (hasTelemetryUrl(s) || hasSNMPHost(s)) out.push({ id: s.id, name: s.name, groupName: gr.name }); }));
+  return out;
+}
+
+/* ── HISTÓRICO DE MÉTRICAS DOS GERADORES (combustível/bateria) ──
+   Mesmo padrão exato do histórico de métricas dos transmissores, só que
+   lendo de liveGen[]. Hoje só existe o log de ligou/desligou (genRunHistory)
+   — isso aqui é a curva contínua do nível de combustível e da tensão da
+   bateria ao longo do tempo, não só o instante em que o motor ligou. */
+const GEN_METRIC_HIST_KEY = 'snMon_genmetrichist_v1';
+const GEN_METRIC_HIST_RETENTION_DAYS = 400;
+const GEN_METRIC_HOURLY_RETENTION_DAYS = 45;
+const GEN_METRIC_LABELS = { fuel: 'Combustível (%)', battery: 'Bateria (V)' };
+let genMetricHistory = {}; // { [genId]: { [dia]: { name, fuel:{peak,sum,count}, battery:{...}, hourly:{[hh]:{fuel,battery}} } } }
+let genMetricHistSaveTimer = null;
+let genMetricHistPruneCheck = {};
+
+function loadGenMetricHistory() {
+  try { genMetricHistory = JSON.parse(localStorage.getItem(GEN_METRIC_HIST_KEY)) || {}; } catch(e) { genMetricHistory = {}; }
+}
+function saveGenMetricHistoryNow() {
+  try { localStorage.setItem(GEN_METRIC_HIST_KEY, JSON.stringify(genMetricHistory)); } catch(e) {}
+}
+function saveGenMetricHistoryDebounced() {
+  if (genMetricHistSaveTimer) return;
+  genMetricHistSaveTimer = setTimeout(() => { genMetricHistSaveTimer = null; saveGenMetricHistoryNow(); }, 5000);
+}
+function pruneGenMetricHistory(genId) {
+  const now = Date.now();
+  if (genMetricHistPruneCheck[genId] && now - genMetricHistPruneCheck[genId] < 24*3600*1000) return;
+  genMetricHistPruneCheck[genId] = now;
+  const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - GEN_METRIC_HIST_RETENTION_DAYS);
+  const cutoffStr = localDateStr(cutoff);
+  const hourlyCutoff = new Date(); hourlyCutoff.setDate(hourlyCutoff.getDate() - GEN_METRIC_HOURLY_RETENTION_DAYS);
+  const hourlyCutoffStr = localDateStr(hourlyCutoff);
+  const days = genMetricHistory[genId];
+  if (!days) return;
+  for (const day in days) {
+    if (day < cutoffStr) { delete days[day]; continue; }
+    if (day < hourlyCutoffStr && days[day].hourly) delete days[day].hourly;
+  }
+}
+function extractGenMetrics(gen) {
+  const d = liveGen[gen.id]?.data;
+  if (!d) return null;
+  return { fuel: d.fuel ?? null, battery: d.batt ?? null };
+}
+function recordGenMetricSample(gen) {
+  const m = extractGenMetrics(gen);
+  if (!m) return;
+  if (!genMetricHistory[gen.id]) genMetricHistory[gen.id] = {};
+  const now = new Date();
+  const day = localDateStr(now);
+  let rec = genMetricHistory[gen.id][day];
+  if (!rec) rec = genMetricHistory[gen.id][day] = { name: gen.name, fuel: emptyMetricAgg(), battery: emptyMetricAgg(), hourly: {} };
+  if (!rec.hourly) rec.hourly = {};
+  rec.name = gen.name;
+  bumpMetricAgg(rec.fuel, m.fuel);
+  bumpMetricAgg(rec.battery, m.battery);
+  const hKey = String(now.getHours()).padStart(2, '0');
+  let hr = rec.hourly[hKey];
+  if (!hr) hr = rec.hourly[hKey] = { fuel: emptyMetricAgg(), battery: emptyMetricAgg() };
+  bumpMetricAgg(hr.fuel, m.fuel);
+  bumpMetricAgg(hr.battery, m.battery);
+  saveGenMetricHistoryDebounced();
+  pruneGenMetricHistory(gen.id);
+  refreshGenMetricReportIfShowing(gen.id);
+}
+function genMetricStationMonthMap(genId, metricKey) {
+  const hist = genMetricHistory[genId] || {};
+  const months = {};
+  for (const day in hist) {
+    const m = day.slice(0, 7);
+    const r = hist[day][metricKey] || emptyMetricAgg();
+    if (!months[m]) months[m] = emptyMetricAgg();
+    months[m].peak = Math.max(months[m].peak, r.peak);
+    months[m].sum += r.sum;
+    months[m].count += r.count;
+  }
+  return months;
+}
+function genMetricDailyRows(genId, metricKey, days) {
+  const hist = genMetricHistory[genId] || {};
+  return Object.keys(hist).sort().slice(-(days || 30)).reverse().map(day => {
+    const r = hist[day][metricKey] || emptyMetricAgg();
+    return { key: day, label: day.split('-').reverse().join('/'), peak: r.peak, avg: r.count ? r.sum / r.count : 0, samples: r.count };
+  });
+}
+function genMetricMonthlyRows(genId, metricKey) {
+  const months = genMetricStationMonthMap(genId, metricKey);
+  return Object.keys(months).sort().reverse().map(m => {
+    const [y, mo] = m.split('-');
+    const r = months[m];
+    return { key: m, label: `${CHART_MESES[+mo-1]}/${y}`, peak: r.peak, avg: r.count ? r.sum / r.count : 0, samples: r.count };
+  });
+}
+function genMetricHourlyRows(genId, metricKey, dayKey) {
+  const hourly = genMetricHistory[genId]?.[dayKey]?.hourly || {};
+  const out = [];
+  for (let h = 0; h < 24; h++) {
+    const hKey = String(h).padStart(2, '0');
+    const r = hourly[hKey]?.[metricKey];
+    out.push({ key: hKey, peak: r ? r.peak : null, avg: (r && r.count) ? r.sum / r.count : null, samples: r ? r.count : 0 });
+  }
+  return out;
+}
+function genMetricIndividualSeries(genId, metricKey, mode) {
+  const limit = mode === 'daily' ? 30 : 12;
+  const map = mode === 'daily'
+    ? Object.fromEntries(Object.entries(genMetricHistory[genId] || {}).map(([k, v]) => [k, v[metricKey]]))
+    : genMetricStationMonthMap(genId, metricKey);
+  const keys = Object.keys(map).sort().slice(-limit);
+  return {
+    keys,
+    series: [
+      { name: 'Pico', color: 'var(--num)', values: keys.map(k => map[k]?.peak ?? null) },
+      { name: 'Média', color: 'var(--muted)', values: keys.map(k => map[k]?.count ? map[k].sum / map[k].count : null) },
+    ],
+  };
+}
+function genMetricHourlySeries(genId, metricKey, dayKey) {
+  const rows = genMetricHourlyRows(genId, metricKey, dayKey);
+  return {
+    keys: rows.map(r => r.key),
+    series: [
+      { name: 'Pico', color: 'var(--num)', values: rows.map(r => r.peak) },
+      { name: 'Média', color: 'var(--muted)', values: rows.map(r => r.avg) },
+    ],
+  };
+}
+function allMetricGenerators() {
+  const out = [];
+  cfg.groups.forEach(gr => {
+    (gr.generators||[]).forEach(gen => out.push({ id: gen.id, name: gen.name, groupName: gr.name }));
+    gr.stations.forEach(s => (s.generators||[]).forEach(gen => out.push({ id: gen.id, name: gen.name, groupName: `${gr.name} / ${s.name}` })));
+  });
   return out;
 }
 
@@ -1517,6 +1707,131 @@ function renderTxReportBody() {
       <th style="padding:7px 4px;text-align:right">Amostras</th>
     </tr></thead>
     <tbody>${rows.map(r => `<tr style="border-top:1px solid var(--bdr);${isDaily ? 'cursor:pointer' : ''}${isDaily && r.key === selDate ? ';background:var(--accent-dim)' : ''}" ${isDaily ? `class="lr-row-clickable" onclick="selectTxHourDay('${r.key}')" title="Ver por hora nesse dia"` : ''}>
+      <td style="padding:8px 4px">${r.label}</td>
+      <td style="padding:8px 4px;text-align:right;font-weight:800;color:var(--num)">${fmtVal(r.peak)}</td>
+      <td style="padding:8px 4px;text-align:right;color:var(--muted)">${fmtVal(r.avg)}</td>
+      <td style="padding:8px 4px;text-align:right;color:var(--muted);font-size:11px">${r.samples}</td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+}
+
+/* ── RELATÓRIO DE COMBUSTÍVEL/BATERIA DOS GERADORES ──
+   Mesmo padrão exato do Relatório de Transmissores, aplicado a gerador em
+   vez de rádio e às métricas fuel/battery em vez de power/vswr/temp. */
+let genMetricReportMode = 'daily';
+let genMetricReportMetric = 'fuel';
+let genMetricCardCollapsed = {};
+function toggleGenMetricChartCard(key) {
+  genMetricCardCollapsed[key] = !genMetricCardCollapsed[key];
+  const card = document.getElementById('gmCard_' + key);
+  const chev = document.getElementById('gmChev_' + key);
+  if (card) card.classList.toggle('collapsed', !!genMetricCardCollapsed[key]);
+  if (chev) chev.classList.toggle('open', !genMetricCardCollapsed[key]);
+}
+function setGenMetric(metric) {
+  genMetricReportMetric = metric;
+  document.getElementById('gmMetricFuel').classList.toggle('active', metric === 'fuel');
+  document.getElementById('gmMetricBattery').classList.toggle('active', metric === 'battery');
+  renderGenMetricReportBody();
+}
+function setGenMetricReportMode(mode) {
+  genMetricReportMode = mode;
+  document.getElementById('gmTabHourly').classList.toggle('active', mode === 'hourly');
+  document.getElementById('gmTabDaily').classList.toggle('active', mode === 'daily');
+  document.getElementById('gmTabMonthly').classList.toggle('active', mode === 'monthly');
+  document.getElementById('gmCard_hour').style.display = mode === 'hourly' ? '' : 'none';
+  document.getElementById('gmTrendSection').style.display = mode === 'hourly' ? 'none' : '';
+  renderGenMetricReportBody();
+}
+function openGenMetricReport() {
+  const sel = document.getElementById('gmGenSelect');
+  const gens = allMetricGenerators();
+  const prevVal = sel.value;
+  sel.innerHTML = gens.map(g => `<option value="${g.id}">${esc(g.name)}${g.groupName ? ' ('+esc(g.groupName)+')' : ''}</option>`).join('')
+    || '<option value="">Nenhum gerador configurado</option>';
+  if (gens.some(g => g.id === prevVal)) sel.value = prevVal;
+  const dateInp = document.getElementById('gmHourDate');
+  if (dateInp) {
+    const todayStr = localDateStr();
+    dateInp.max = todayStr;
+    if (!dateInp.value) dateInp.value = todayStr;
+  }
+  renderGenMetricReportBody();
+  document.getElementById('genMetricReportModal').classList.add('open');
+}
+function closeGenMetricReport() { document.getElementById('genMetricReportModal').classList.remove('open'); }
+function selectGenMetricHourDay(dayKey) {
+  const inp = document.getElementById('gmHourDate');
+  if (inp) inp.value = dayKey;
+  setGenMetricReportMode('hourly');
+}
+function renderGenMetricHourlyChart() {
+  const genId = document.getElementById('gmGenSelect')?.value;
+  const dayKey = document.getElementById('gmHourDate')?.value;
+  const el = document.getElementById('gmChartHour');
+  const titleEl = document.getElementById('gmChartHourTitle');
+  const genInfo = allMetricGenerators().find(x => x.id === genId);
+  const metricLabel = GEN_METRIC_LABELS[genMetricReportMetric];
+  if (titleEl) titleEl.textContent = (genInfo && dayKey) ? `${genInfo.name} — ${metricLabel} por hora (${chartKeyLabelFull(dayKey, 'daily')})` : metricLabel;
+  if (!el) return;
+  if (!genId || !dayKey) { el.innerHTML = ''; return; }
+  const { keys, series } = genMetricHourlySeries(genId, genMetricReportMetric, dayKey);
+  renderTrendChart(el, keys, series, { mode: 'hourly', emptyMsg: 'Sem amostras registradas nesse dia.' });
+}
+let genMetricLiveRefreshTimer = null;
+function refreshGenMetricReportIfShowing(genId) {
+  const modal = document.getElementById('genMetricReportModal');
+  if (!modal || !modal.classList.contains('open')) return;
+  if (document.getElementById('gmGenSelect')?.value !== genId) return;
+  if (genMetricLiveRefreshTimer) return;
+  genMetricLiveRefreshTimer = setTimeout(() => {
+    genMetricLiveRefreshTimer = null;
+    if (genMetricReportMode === 'hourly') {
+      if (document.getElementById('gmHourDate')?.value === localDateStr()) renderGenMetricHourlyChart();
+      return;
+    }
+    renderGenMetricReportBody();
+  }, 800);
+}
+function renderGenMetricReportBody() {
+  const genId = document.getElementById('gmGenSelect')?.value;
+
+  if (genMetricReportMode === 'hourly') {
+    renderGenMetricHourlyChart();
+    return;
+  }
+
+  const body = document.getElementById('gmReportBody');
+  if (!body) return;
+  const modeLabel = genMetricReportMode === 'daily' ? 'diário' : 'mensal';
+  const metricLabel = GEN_METRIC_LABELS[genMetricReportMetric];
+
+  const chartEl = document.getElementById('gmChartMain');
+  const chartTitle = document.getElementById('gmChartMainTitle');
+  const genInfo = allMetricGenerators().find(x => x.id === genId);
+  if (chartTitle) chartTitle.textContent = genInfo ? `${genInfo.name} — ${metricLabel} (pico/média ${modeLabel})` : 'Gerador selecionado';
+  if (chartEl) {
+    if (!genId) { chartEl.innerHTML = ''; }
+    else {
+      const { keys, series } = genMetricIndividualSeries(genId, genMetricReportMetric, genMetricReportMode);
+      renderTrendChart(chartEl, keys, series, { mode: genMetricReportMode, emptyMsg: 'Ainda sem dados suficientes — o histórico começa a ser guardado a partir de agora, com o gerador online.' });
+    }
+  }
+
+  if (!genId) { body.innerHTML = `<div class="al-empty">Nenhum gerador configurado.</div>`; return; }
+  const rows = genMetricReportMode === 'daily' ? genMetricDailyRows(genId, genMetricReportMetric, 60) : genMetricMonthlyRows(genId, genMetricReportMetric);
+  if (!rows.length) { body.innerHTML = `<div class="al-empty">Ainda sem dados suficientes — o histórico começa a ser guardado a partir de agora, com o gerador online.</div>`; return; }
+  const selDate = document.getElementById('gmHourDate')?.value;
+  const isDaily = genMetricReportMode === 'daily';
+  const fmtVal = v => genMetricReportMetric === 'battery' ? v.toFixed(1)+' V' : v.toFixed(0)+'%';
+  body.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr style="text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">
+      <th style="padding:7px 4px">${isDaily ? 'Data' : 'Mês'}</th>
+      <th style="padding:7px 4px;text-align:right">Pico</th>
+      <th style="padding:7px 4px;text-align:right">Média</th>
+      <th style="padding:7px 4px;text-align:right">Amostras</th>
+    </tr></thead>
+    <tbody>${rows.map(r => `<tr style="border-top:1px solid var(--bdr);${isDaily ? 'cursor:pointer' : ''}${isDaily && r.key === selDate ? ';background:var(--accent-dim)' : ''}" ${isDaily ? `class="lr-row-clickable" onclick="selectGenMetricHourDay('${r.key}')" title="Ver por hora nesse dia"` : ''}>
       <td style="padding:8px 4px">${r.label}</td>
       <td style="padding:8px 4px;text-align:right;font-weight:800;color:var(--num)">${fmtVal(r.peak)}</td>
       <td style="padding:8px 4px;text-align:right;color:var(--muted)">${fmtVal(r.avg)}</td>
@@ -3343,6 +3658,7 @@ async function fetchGenModbus(gen) {
     liveGen[gen.id] = { data: prev?.data||null, err: e.message||'Falha', loading: false, ts: prev?.ts||null };
   }
   evaluateGenAlerts(gen, liveGen[gen.id]);
+  recordGenMetricSample(gen);
   renderAll();
 }
 
@@ -3360,6 +3676,7 @@ async function fetchGen(gen) {
     liveGen[gen.id] = { data: prev?.data||null, err: e.message||'Falha', loading: false, ts: prev?.ts||null };
   }
   evaluateGenAlerts(gen, liveGen[gen.id]);
+  recordGenMetricSample(gen);
   renderAll();
   pollGenModbus(gen);
 }
@@ -4907,6 +5224,7 @@ function init() {
   loadGenRunHistory();
   loadListenerHistory();
   loadTxMetricHistory();
+  loadGenMetricHistory();
   loadGroupLayout();
   loadGroupDensity();
   loadPanelsHidden();
