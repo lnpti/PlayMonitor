@@ -1327,6 +1327,8 @@ function startBTConn(stn) {
       const json = JSON.parse(e.data);
       if (!json || typeof json !== 'object' || !json.state) return;
       live[stn.id] = { data: parseBTData(json), err: null, loading: false, ts: Date.now() };
+      evaluateStnConnAlerts(stn);
+      evaluateStnRFAlerts(stn);
       updateGlobalTs();
       renderAll();
     } catch {}
@@ -1338,6 +1340,11 @@ function startBTConn(stn) {
   ws.onclose = () => {
     if (btWs[stn.id] === ws) {
       live[stn.id] = { data: live[stn.id]?.data || null, err: 'Conexão BT encerrada', loading: false, ts: live[stn.id]?.ts || null };
+      // Só aqui (não em onerror, que sempre precede onclose) — evita contar
+      // a mesma queda duas vezes e disparar "TRANSMISSOR INACESSÍVEL" antes
+      // da hora. onclose sempre roda pra toda queda de conexão, incluindo
+      // depois de um erro, então é o ponto certo pra contar.
+      evaluateStnConnAlerts(stn);
       renderAll();
       // reconnect after 10s
       setTimeout(() => { if (btWs[stn.id] === ws) startBTConn(stn); }, 10000);
@@ -1422,6 +1429,7 @@ async function fetchSNMPStn(stn) {
     live[stn.id] = { data: prev?.data||null, err: e.message||'Falha na conexão SNMP', loading: false, ts: prev?.ts||null };
   }
   evaluateStnConnAlerts(stn);
+  evaluateStnRFAlerts(stn);
   renderAll();
   updateGlobalTs();
 }
@@ -2503,6 +2511,7 @@ async function fetchStn(stn) {
     live[stn.id] = { data: prev?.data||null, err: e.message||'Falha na conexão', loading: false, ts: prev?.ts||null };
   }
   evaluateStnConnAlerts(stn);
+  evaluateStnRFAlerts(stn);
   renderAll();
   updateGlobalTs();
 }
@@ -2531,6 +2540,118 @@ function evaluateStnConnAlerts(stn) {
       addEvent(stn.id, stn.name, '🟢', 'ok', 'stnOffline', `${stnLabel}: Transmissor voltou a responder`);
     }
   }
+  updateBell();
+  renderAlertBanner();
+}
+
+// ── FALHA DE RF / VSWR / TEMPERATURA / POTÊNCIA ── até aqui só existia
+// visual (dot vermelho, barra de falha) — nenhum desses estados gerava
+// evento/notificação de verdade. Funciona pros 3 tipos de transmissor
+// (Synteck XT, BT APP10, Synteck RUS), cada um com seus próprios nomes de
+// campo, normalizados aqui em `extract()`.
+//
+// IMPORTANTE: nunca alerta por potência BAIXA — várias rádios operam de
+// propósito abaixo do máximo do transmissor, e algumas reduzem a potência
+// à noite pra economizar energia. Só potência ACIMA do alvo é alertada,
+// já que isso quase nunca é intencional. Sem alvo de potência conhecido
+// (RUS), esse alerta específico simplesmente não roda.
+function evaluateStnRFAlerts(stn) {
+  if (!live[stn.id]?.data) return; // sem dado novo (ex.: offline) — não mexe no estado dos alertas de RF
+  if (!genAlertSt[stn.id]) genAlertSt[stn.id] = { pending:{}, active:{}, fetchFailCount:0, prevData:null };
+  const gs = genAlertSt[stn.id];
+  const groupName = getStationGroupName(stn.id);
+  const stnLabel = groupName ? `${stn.name} (${groupName})` : stn.name;
+
+  function extract() {
+    const cur = live[stn.id]?.data;
+    if (!cur) return { fault: null, vswr: null, temp: null, pwrPct: null };
+    if (stn.txType === 'bt') {
+      return {
+        fault: cur.hasAlarms ? ('Alarme ativo' + (cur.hasMemAlarms ? ' (com alarmes em memória)' : '')) : null,
+        vswr: cur.vswr, temp: cur.temp, pwrPct: cur.fwdPct,
+      };
+    }
+    if (stn.txType === 'snmp') {
+      return { fault: cur.failState ? (cur.statusText || 'Falha reportada pelo transmissor') : null, vswr: cur.vswr, temp: cur.temp, pwrPct: null };
+    }
+    return {
+      fault: cur.faults || null,
+      vswr: cur.ref?.vswr ?? null, temp: cur.temp,
+      pwrPct: (cur.fwd?.w != null && cur.fwd?.tgt) ? cur.fwd.w / cur.fwd.tgt * 100 : null,
+    };
+  }
+
+  const now0 = extract();
+
+  // ── Falha reportada pelo próprio transmissor (sem debounce — já é o
+  // estado confirmado do equipamento, não uma leitura bruta ruidosa) ──
+  if (now0.fault) {
+    if (!gs.active.rfFault) {
+      gs.active.rfFault = true;
+      addEvent(stn.id, stn.name, '🚨', 'crit', 'rfFault', `${stnLabel}: FALHA NO TRANSMISSOR`, now0.fault);
+    }
+  } else if (gs.active.rfFault) {
+    gs.active.rfFault = false;
+    addEvent(stn.id, stn.name, '🟢', 'ok', 'rfFault', `${stnLabel}: Falha do transmissor resolvida`);
+  }
+
+  // ── VSWR alto (aviso >1.5, crítico >2.0 — mesmos limiares já usados na cor visual) ──
+  if (now0.vswr != null && now0.vswr > 1.5) {
+    if (!gs.pending.vswrHigh && !gs.active.vswrHigh)
+      setPendingAlert(stn.id, 'vswrHigh', ALERT_DELAYS.vswrHigh, () => {
+        const cur = extract();
+        if (cur.vswr != null && cur.vswr > 1.5) {
+          genAlertSt[stn.id].active.vswrHigh = true;
+          addEvent(stn.id, stn.name, cur.vswr>2.0?'🚨':'⚠️', cur.vswr>2.0?'crit':'high', 'vswrHigh',
+            `${stnLabel}: VSWR ALTO — ${cur.vswr.toFixed(2)}:1`, 'Verifique antena/linha de transmissão.');
+        }
+      });
+  } else {
+    clearPendingAlert(stn.id, 'vswrHigh');
+    if (gs.active.vswrHigh) {
+      gs.active.vswrHigh = false;
+      addEvent(stn.id, stn.name, '🟢', 'ok', 'vswrHigh', `${stnLabel}: VSWR normalizado` + (now0.vswr!=null?` — ${now0.vswr.toFixed(2)}:1`:''));
+    }
+  }
+
+  // ── Temperatura alta (aviso >50°C, crítico >65°C) ──
+  if (now0.temp != null && now0.temp > 50) {
+    if (!gs.pending.tempHigh && !gs.active.tempHigh)
+      setPendingAlert(stn.id, 'tempHigh', ALERT_DELAYS.tempHigh, () => {
+        const cur = extract();
+        if (cur.temp != null && cur.temp > 50) {
+          genAlertSt[stn.id].active.tempHigh = true;
+          addEvent(stn.id, stn.name, cur.temp>65?'🚨':'⚠️', cur.temp>65?'crit':'high', 'tempHigh',
+            `${stnLabel}: TEMPERATURA ALTA — ${cur.temp.toFixed(1)}°C`);
+        }
+      });
+  } else {
+    clearPendingAlert(stn.id, 'tempHigh');
+    if (gs.active.tempHigh) {
+      gs.active.tempHigh = false;
+      addEvent(stn.id, stn.name, '🟢', 'ok', 'tempHigh', `${stnLabel}: Temperatura normalizada` + (now0.temp!=null?` — ${now0.temp.toFixed(1)}°C`:''));
+    }
+  }
+
+  // ── Potência acima do alvo (>115% — nunca alerta por potência baixa, ver comentário no topo) ──
+  if (now0.pwrPct != null && now0.pwrPct > 115) {
+    if (!gs.pending.pwrHigh && !gs.active.pwrHigh)
+      setPendingAlert(stn.id, 'pwrHigh', ALERT_DELAYS.pwrHigh, () => {
+        const cur = extract();
+        if (cur.pwrPct != null && cur.pwrPct > 115) {
+          genAlertSt[stn.id].active.pwrHigh = true;
+          addEvent(stn.id, stn.name, '⚠️', 'high', 'pwrHigh', `${stnLabel}: POTÊNCIA ACIMA DO ALVO — ${cur.pwrPct.toFixed(0)}%`,
+            'Verifique calibração ou o alvo de potência configurado.');
+        }
+      });
+  } else {
+    clearPendingAlert(stn.id, 'pwrHigh');
+    if (gs.active.pwrHigh) {
+      gs.active.pwrHigh = false;
+      addEvent(stn.id, stn.name, '🟢', 'ok', 'pwrHigh', `${stnLabel}: Potência normalizada`);
+    }
+  }
+
   updateBell();
   renderAlertBanner();
 }
@@ -3745,6 +3866,9 @@ const ALERT_DELAYS = {
   oilLow: 8000,
   fuelWarn: 10000,
   fuelCrit: 10000,
+  vswrHigh: 15000,
+  tempHigh: 15000,
+  pwrHigh: 15000,
 };
 const FUEL_CRIT_REPEAT_MS = 15 * 60 * 1000; // reenvia o alerta crítico de combustível a cada 15min enquanto <15%
 
@@ -3781,9 +3905,10 @@ const NOTIFY_ALL_CATEGORIES = ['transmitter','generator','streaming'];
 // escolhe receber ou não. streamDown/stnOffline são específicos; qualquer
 // outro condKey (inclusive null, usado nos eventos de comando manual e
 // "sistema normal") vem de gerador.
+const TRANSMITTER_COND_KEYS = new Set(['stnOffline', 'rfFault', 'vswrHigh', 'tempHigh', 'pwrHigh']);
 function eventCategory(condKey) {
   if (condKey === 'streamDown') return 'streaming';
-  if (condKey === 'stnOffline') return 'transmitter';
+  if (TRANSMITTER_COND_KEYS.has(condKey)) return 'transmitter';
   return 'generator';
 }
 
